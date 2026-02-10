@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import uuid
 from datetime import date
 
@@ -7,10 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.db.session import get_db
 from app.core.security.rbac import require_role
 from app.domain.cash_management.enums import CashTransactionDirection, CashTransactionStatus
 from app.domain.cash_management.models.cash import CashTransaction
+from app.domain.cash_management.models.bank_statements import BankStatementLine, BankStatementUpload
 from app.domain.cash_management.service import (
     approve,
     create_transaction,
@@ -27,6 +30,7 @@ from app.domain.cash_management.services.reconciliation import (
     match_statement_lines,
     upload_bank_statement,
 )
+from app.services.blob_storage import upload_bytes_idempotent
 
 
 router = APIRouter(prefix="/funds/{fund_id}/cash", tags=["Cash Management"])
@@ -61,6 +65,37 @@ def _tx_out(tx: CashTransaction) -> dict:
         "instructions_blob_uri": tx.instructions_blob_uri,
         "evidence_bundle_blob_uri": tx.evidence_bundle_blob_uri,
         "evidence_bundle_sha256": tx.evidence_bundle_sha256,
+    }
+
+
+def _statement_out(s: BankStatementUpload) -> dict:
+    return {
+        "id": str(s.id),
+        "fund_id": str(s.fund_id),
+        "period_start": s.period_start.isoformat(),
+        "period_end": s.period_end.isoformat(),
+        "uploaded_by": s.uploaded_by,
+        "uploaded_at": s.uploaded_at.isoformat(),
+        "blob_path": s.blob_path,
+        "original_filename": s.original_filename,
+        "sha256": s.sha256,
+        "notes": s.notes,
+    }
+
+
+def _line_out(line: BankStatementLine) -> dict:
+    return {
+        "id": str(line.id),
+        "statement_id": str(line.statement_id),
+        "value_date": line.value_date.isoformat(),
+        "description": line.description,
+        "amount_usd": float(line.amount_usd),
+        "direction": line.direction.value,
+        "matched_transaction_id": str(line.matched_transaction_id) if line.matched_transaction_id else None,
+        "reconciliation_status": line.reconciliation_status.value,
+        "reconciled_at": line.reconciled_at.isoformat() if line.reconciled_at else None,
+        "reconciled_by": line.reconciled_by,
+        "reconciliation_notes": line.reconciliation_notes,
     }
 
 
@@ -297,32 +332,55 @@ def mark_exec(
 
 
 @router.post("/statements/upload")
-def upload_statement(
+async def upload_statement(
     fund_id: uuid.UUID,
-    payload: dict,
+    period_start: str,
+    period_end: str,
+    file: UploadFile = File(...),
+    notes: str | None = None,
     db: Session = Depends(get_db),
     actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN"])),
 ):
     """
     Upload a bank statement for reconciliation.
-    Stores statement metadata in registry.
+    Stores statement metadata in registry and persists the file in blob storage (append-only evidence).
     """
     _require_fund_access(fund_id, actor)
-    
+
+    filename = (file.filename or "statement").strip()
+    lower = filename.lower()
+    allowed_ext = (".pdf", ".csv", ".xls", ".xlsx")
+    if not any(lower.endswith(ext) for ext in allowed_ext):
+        raise HTTPException(status_code=400, detail="Only PDF/CSV/XLS/XLSX files are allowed")
+
     try:
-        period_start = date.fromisoformat(payload["period_start"])
-        period_end = date.fromisoformat(payload["period_end"])
-        
+        ps = date.fromisoformat(period_start)
+        pe = date.fromisoformat(period_end)
+
+        data = await file.read()
+        sha = hashlib.sha256(data).hexdigest()
+        safe = "".join(c for c in filename if c.isalnum() or c in ("-", "_", "."))
+        safe = safe or "statement"
+        blob_name = f"{fund_id}/cash/statements/{sha}/{safe}"
+
+        write_res = upload_bytes_idempotent(
+            container=settings.AZURE_STORAGE_EVIDENCE_CONTAINER,
+            blob_name=blob_name,
+            data=data,
+            content_type=file.content_type,
+            metadata={"fund_id": str(fund_id), "sha256": sha, "source": "bank_statement"},
+        )
+
         upload = upload_bank_statement(
             db,
             fund_id=fund_id,
             actor=actor,
-            period_start=period_start,
-            period_end=period_end,
-            blob_path=payload["blob_path"],
-            original_filename=payload.get("original_filename"),
-            sha256=payload.get("sha256"),
-            notes=payload.get("notes"),
+            period_start=ps,
+            period_end=pe,
+            blob_path=write_res.blob_uri,
+            original_filename=filename,
+            sha256=sha,
+            notes=notes,
         )
         return {
             "statement_id": str(upload.id),
@@ -330,8 +388,37 @@ def upload_statement(
             "period_end": upload.period_end.isoformat(),
             "blob_path": upload.blob_path,
         }
-    except (ValueError, KeyError) as e:
+    except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/statements")
+def list_statements(
+    fund_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN", "AUDITOR"])),
+):
+    _require_fund_access(fund_id, actor)
+    stmt = select(BankStatementUpload).where(BankStatementUpload.fund_id == fund_id).order_by(BankStatementUpload.uploaded_at.desc())
+    items = list(db.execute(stmt).scalars().all())
+    return {"items": [_statement_out(s) for s in items]}
+
+
+@router.get("/statements/{statement_id}/lines")
+def list_statement_lines(
+    fund_id: uuid.UUID,
+    statement_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN", "AUDITOR"])),
+):
+    _require_fund_access(fund_id, actor)
+    stmt = (
+        select(BankStatementLine)
+        .where(BankStatementLine.fund_id == fund_id, BankStatementLine.statement_id == statement_id)
+        .order_by(BankStatementLine.value_date.asc())
+    )
+    lines = list(db.execute(stmt).scalars().all())
+    return {"items": [_line_out(l) for l in lines]}
 
 
 @router.post("/statements/{statement_id}/lines")
