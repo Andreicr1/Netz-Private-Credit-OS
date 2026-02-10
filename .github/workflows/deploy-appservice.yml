@@ -117,133 +117,19 @@ jobs:
           # Avoid SCM restarts racing with zip deploy
           sleep 20
 
-      - name: Wait for ongoing deployments
+      - name: Deploy (az webapp deploy)
         shell: bash
         run: |
           set -euo pipefail
 
-          # Kudu may reject zip deploy with 409 if another deployment is running.
-          for i in $(seq 1 240); do
-            status=$(az webapp log deployment list \
-              --resource-group "${AZURE_RESOURCE_GROUP}" \
-              --name "${AZURE_WEBAPP_NAME}" \
-              --query "[0].status" -o tsv || true)
-
-            # status 0=receiving changes, 1=building/deploying
-            if [[ "${status}" != "0" && "${status}" != "1" ]]; then
-              echo "No ongoing deployment detected (latest status=${status})."
-              exit 0
-            fi
-
-            echo "Ongoing deployment detected (latest status=${status}). Waiting 30s..."
-            sleep 30
-          done
-
-          echo "Timed out waiting for ongoing deployment to finish. Latest deployments:"
-          az webapp log deployment list \
-            --resource-group "${AZURE_RESOURCE_GROUP}" \
-            --name "${AZURE_WEBAPP_NAME}" \
-            --query "[0:5].{id:id,status:status,status_text:status_text,progress:progress,start_time:start_time,end_time:end_time}" \
-            -o table
-          exit 1
-
-      - name: Deploy (az webapp deploy) and wait
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          prev_id=$(az webapp log deployment list \
-            --resource-group "${AZURE_RESOURCE_GROUP}" \
-            --name "${AZURE_WEBAPP_NAME}" \
-            --query "[0].id" -o tsv 2>/dev/null || true)
-          echo "Previous deployment id: ${prev_id:-<none>}"
-
-          # Push the artifact asynchronously; Kudu/Oryx may keep building after the command returns.
+          # Deploy synchronously; rely on /health smoke test as the source of truth.
           # NOTE: --timeout is in milliseconds for `az webapp deploy`.
-          set +e
-          out=$(az webapp deploy \
+          az webapp deploy \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --name "${AZURE_WEBAPP_NAME}" \
             --type zip \
             --src-path deploy.zip \
-            --async true \
-            --timeout 7200000 \
-            --track-status false 2>&1)
-          rc=$?
-          set -e
-          echo "$out"
-
-          # Kudu sometimes returns 504 even though the deployment continues server-side.
-          if [[ $rc -ne 0 && "$out" != *"Status Code: 504"* ]]; then
-            echo "Deploy command failed (rc=$rc)."
-            exit $rc
-          fi
-
-          dep_id=""
-          for i in $(seq 1 120); do
-            latest_id=$(az webapp log deployment list \
-              --resource-group "${AZURE_RESOURCE_GROUP}" \
-              --name "${AZURE_WEBAPP_NAME}" \
-              --query "[0].id" -o tsv 2>/dev/null || true)
-            if [[ -n "${latest_id}" && "${latest_id}" != "${prev_id}" ]]; then
-              dep_id="${latest_id}"
-              break
-            fi
-            sleep 5
-          done
-
-          if [[ -z "${dep_id}" ]]; then
-            echo "No new deployment id detected after initiating deployment. Latest deployments:"
-            az webapp log deployment list \
-              --resource-group "${AZURE_RESOURCE_GROUP}" \
-              --name "${AZURE_WEBAPP_NAME}" \
-              --query "[0:5].{id:id,status:status,status_text:status_text,progress:progress,start_time:start_time,end_time:end_time}" \
-              -o table
-            exit 1
-          fi
-
-          echo "Tracking deployment id: ${dep_id}"
-          for i in $(seq 1 360); do
-            status=$(az webapp log deployment show \
-              --resource-group "${AZURE_RESOURCE_GROUP}" \
-              --name "${AZURE_WEBAPP_NAME}" \
-              --deployment-id "${dep_id}" \
-              --query "status" -o tsv 2>/dev/null || true)
-            status_text=$(az webapp log deployment show \
-              --resource-group "${AZURE_RESOURCE_GROUP}" \
-              --name "${AZURE_WEBAPP_NAME}" \
-              --deployment-id "${dep_id}" \
-              --query "status_text" -o tsv 2>/dev/null || true)
-            progress=$(az webapp log deployment show \
-              --resource-group "${AZURE_RESOURCE_GROUP}" \
-              --name "${AZURE_WEBAPP_NAME}" \
-              --deployment-id "${dep_id}" \
-              --query "progress" -o tsv 2>/dev/null || true)
-
-            echo "[${i}/360] status=${status:-?} status_text=${status_text:-?} progress=${progress:-?}"
-
-            if [[ "${status}" == "4" ]]; then
-              echo "Deployment completed successfully."
-              exit 0
-            fi
-            if [[ "${status}" == "3" ]]; then
-              echo "Deployment failed. Details:"
-              az webapp log deployment show \
-                --resource-group "${AZURE_RESOURCE_GROUP}" \
-                --name "${AZURE_WEBAPP_NAME}" \
-                --deployment-id "${dep_id}" -o json
-              exit 1
-            fi
-
-            sleep 10
-          done
-
-          echo "Timed out waiting for deployment to complete. Details:"
-          az webapp log deployment show \
-            --resource-group "${AZURE_RESOURCE_GROUP}" \
-            --name "${AZURE_WEBAPP_NAME}" \
-            --deployment-id "${dep_id}" -o json
-          exit 1
+            --timeout 1800000
 
       - name: Smoke test /health
         shell: bash
