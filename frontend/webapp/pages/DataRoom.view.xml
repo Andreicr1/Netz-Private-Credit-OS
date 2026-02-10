@@ -1,0 +1,56 @@
+<mvc:View
+  controllerName="netz.fund.os.pages.DataRoom"
+  xmlns:mvc="sap.ui.core.mvc"
+  xmlns="sap.m"
+>
+  <Page title="Data Room Registry" showHeader="true">
+    <content>
+      <VBox class="sapUiSmallMargin" width="100%">
+        <Toolbar>
+          <Title text="Documents" level="H3" />
+          <ToolbarSpacer />
+          <Button text="Refresh" type="Transparent" press="onRefresh" />
+        </Toolbar>
+
+        <MessageStrip
+          text="{= ${dataroom>/status} === 'error' ? 'Failed to load documents from backend.' : '' }"
+          type="Error"
+          showIcon="true"
+          visible="{= ${dataroom>/status} === 'error' }"
+        />
+
+        <Table id="docsTable" items="{dataroom>/items}" inset="false" width="100%">
+          <columns>
+            <Column>
+              <Text text="Root Folder" />
+            </Column>
+            <Column>
+              <Text text="Folder Path" />
+            </Column>
+            <Column>
+              <Text text="Title" />
+            </Column>
+            <Column>
+              <Text text="Updated At" />
+            </Column>
+            <Column>
+              <Text text="Domain" />
+            </Column>
+          </columns>
+          <items>
+            <ColumnListItem>
+              <cells>
+                <Text text="{= ${dataroom>rootFolder} || ${dataroom>root_folder} || ${dataroom>root} || '' }" />
+                <Text text="{= ${dataroom>folderPath} || ${dataroom>folder_path} || ${dataroom>path} || '' }" />
+                <Text text="{= ${dataroom>title} || ${dataroom>name} || '' }" />
+                <Text text="{= ${dataroom>updatedAt} || ${dataroom>updated_at} || ${dataroom>last_modified} || '' }" />
+                <Text text="{= ${dataroom>domain} || ${dataroom>category} || '' }" />
+              </cells>
+            </ColumnListItem>
+          </items>
+        </Table>
+      </VBox>
+    </content>
+  </Page>
+</mvc:View>
+

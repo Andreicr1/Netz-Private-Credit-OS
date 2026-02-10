@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.core.db.session import get_db
 from app.core.security.rbac import require_role
+from app.domain.cash_management.enums import CashTransactionDirection
 from app.domain.cash_management.service import (
     approve,
     create_transaction,
@@ -14,6 +16,13 @@ from app.domain.cash_management.service import (
     mark_executed,
     mark_sent_to_admin,
     submit_transaction,
+)
+from app.domain.cash_management.services.reconciliation import (
+    add_statement_line,
+    detect_missing_transactions,
+    detect_unexplained_outflows,
+    match_statement_lines,
+    upload_bank_statement,
 )
 
 
@@ -170,6 +179,144 @@ def mark_exec(
             notes=payload.get("notes"),
         )
         return {"transaction_id": str(tx.id), "status": tx.status.value, "executed_at": tx.execution_confirmed_at.isoformat()}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# Bank Statement Reconciliation Endpoints
+
+
+@router.post("/statements/upload")
+def upload_statement(
+    payload: dict,
+    db: Session = Depends(get_db),
+    actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN"])),
+):
+    """
+    Upload a bank statement for reconciliation.
+    Stores statement metadata in registry.
+    """
+    if "fund_id" not in payload:
+        raise HTTPException(status_code=400, detail="fund_id is required")
+    fund_id = uuid.UUID(str(payload["fund_id"]))
+    _require_fund_access(fund_id, actor)
+    
+    try:
+        period_start = date.fromisoformat(payload["period_start"])
+        period_end = date.fromisoformat(payload["period_end"])
+        
+        upload = upload_bank_statement(
+            db,
+            fund_id=fund_id,
+            actor=actor,
+            period_start=period_start,
+            period_end=period_end,
+            blob_path=payload["blob_path"],
+            original_filename=payload.get("original_filename"),
+            sha256=payload.get("sha256"),
+            notes=payload.get("notes"),
+        )
+        return {
+            "statement_id": str(upload.id),
+            "period_start": upload.period_start.isoformat(),
+            "period_end": upload.period_end.isoformat(),
+            "blob_path": upload.blob_path,
+        }
+    except (ValueError, KeyError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/statements/{statement_id}/lines")
+def add_line(
+    statement_id: uuid.UUID,
+    payload: dict,
+    db: Session = Depends(get_db),
+    actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN"])),
+):
+    """
+    Add a manual statement line for reconciliation.
+    """
+    if "fund_id" not in payload:
+        raise HTTPException(status_code=400, detail="fund_id is required")
+    fund_id = uuid.UUID(str(payload["fund_id"]))
+    _require_fund_access(fund_id, actor)
+    
+    try:
+        value_date = date.fromisoformat(payload["value_date"])
+        direction = CashTransactionDirection(payload["direction"])
+        
+        line = add_statement_line(
+            db,
+            fund_id=fund_id,
+            actor=actor,
+            statement_id=statement_id,
+            value_date=value_date,
+            description=payload["description"],
+            amount_usd=float(payload["amount_usd"]),
+            direction=direction,
+        )
+        return {
+            "line_id": str(line.id),
+            "value_date": line.value_date.isoformat(),
+            "amount_usd": float(line.amount_usd),
+            "direction": line.direction.value,
+            "reconciliation_status": line.reconciliation_status.value,
+        }
+    except (ValueError, KeyError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/reconcile")
+def reconcile(
+    payload: dict,
+    db: Session = Depends(get_db),
+    actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN"])),
+):
+    """
+    Run reconciliation engine to match bank statement lines with transactions.
+    """
+    if "fund_id" not in payload:
+        raise HTTPException(status_code=400, detail="fund_id is required")
+    fund_id = uuid.UUID(str(payload["fund_id"]))
+    _require_fund_access(fund_id, actor)
+    
+    try:
+        statement_id = uuid.UUID(payload["statement_id"]) if "statement_id" in payload else None
+        date_tolerance_days = int(payload.get("date_tolerance_days", 5))
+        
+        result = match_statement_lines(
+            db,
+            fund_id=fund_id,
+            actor=actor,
+            statement_id=statement_id,
+            date_tolerance_days=date_tolerance_days,
+        )
+        return result
+    except (ValueError, KeyError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/reconciliation/report")
+def reconciliation_report(
+    fund_id: uuid.UUID = Query(...),
+    db: Session = Depends(get_db),
+    actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN"])),
+):
+    """
+    Get reconciliation report showing unmatched lines and unexplained transactions.
+    """
+    _require_fund_access(fund_id, actor)
+    
+    try:
+        missing_tx = detect_missing_transactions(db, fund_id=fund_id)
+        unexplained_outflows = detect_unexplained_outflows(db, fund_id=fund_id)
+        
+        return {
+            "fund_id": str(fund_id),
+            "unmatched_bank_lines": missing_tx,
+            "unexplained_outflows": unexplained_outflows,
+            "discrepancies_count": len(missing_tx) + len(unexplained_outflows),
+        }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

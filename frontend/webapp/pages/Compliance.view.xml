@@ -1,0 +1,14 @@
+<mvc:View
+  controllerName="netz.fund.os.pages.Compliance"
+  xmlns:mvc="sap.ui.core.mvc"
+  xmlns="sap.m"
+>
+  <Page title="Compliance & Obligations" showHeader="true">
+    <content>
+      <VBox class="sapUiSmallMargin">
+        <Title text="Compliance" level="H2" />
+        <Text text="Read-only placeholders for obligations, evidence, and audit workflows." />
+      </VBox>
+    </content>
+  </Page>
+</mvc:View>

@@ -7,10 +7,33 @@ from sqlalchemy import CheckConstraint, DateTime, Enum as SAEnum, ForeignKey, In
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db.base import AuditMetaMixin, Base, FundScopedMixin, IdMixin
-from app.domain.cash_management.enums import CashTransactionStatus, CashTransactionType
+from app.domain.cash_management.enums import CashTransactionDirection, CashTransactionStatus, CashTransactionType
+
+
+class FundCashAccount(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    """
+    Represents the single USD bank account for a fund.
+    Only one per fund is allowed (enforced via unique constraint on fund_id).
+    """
+
+    __tablename__ = "fund_cash_accounts"
+
+    bank_name: Mapped[str] = mapped_column(String(200), nullable=False, server_default="Fund Bank Cayman")
+    administrator_name: Mapped[str] = mapped_column(String(200), nullable=False, server_default="Zedra")
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default="USD")
+    account_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    swift_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("currency = 'USD'", name="ck_fund_cash_accounts_usd_only"),
+        Index("ix_fund_cash_accounts_fund", "fund_id", unique=True),
+    )
 
 
 class CashAccount(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    """Legacy cash account model - kept for backward compatibility."""
+
     __tablename__ = "cash_accounts"
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -26,11 +49,20 @@ class CashAccount(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
 
 
 class CashTransaction(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    """
+    Core ledger of all cash movements.
+    Every transaction is append-only and must have classification, justification, and evidence.
+    """
+
     __tablename__ = "cash_transactions"
 
     type: Mapped[CashTransactionType] = mapped_column(SAEnum(CashTransactionType, name="cash_tx_type_enum"), nullable=False)
+    direction: Mapped[CashTransactionDirection] = mapped_column(
+        SAEnum(CashTransactionDirection, name="cash_direction_enum"), nullable=False
+    )
     amount: Mapped[float] = mapped_column(Numeric(20, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default="USD")
+    reference_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True, unique=True)
     status: Mapped[CashTransactionStatus] = mapped_column(
         SAEnum(CashTransactionStatus, name="cash_tx_status_enum"),
         nullable=False,

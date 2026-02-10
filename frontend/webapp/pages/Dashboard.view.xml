@@ -1,0 +1,14 @@
+<mvc:View
+  controllerName="netz.fund.os.pages.Dashboard"
+  xmlns:mvc="sap.ui.core.mvc"
+  xmlns="sap.m"
+>
+  <Page title="Dashboard" showHeader="true">
+    <content>
+      <VBox class="sapUiSmallMargin">
+        <Title text="Governance Dashboard" level="H2" />
+        <Text text="Read-only overview. Workflows will be implemented in EPIC 5." />
+      </VBox>
+    </content>
+  </Page>
+</mvc:View>

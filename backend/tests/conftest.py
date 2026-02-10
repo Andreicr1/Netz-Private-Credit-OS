@@ -66,6 +66,11 @@ def db_session(db_engine) -> Generator[Session, None, None]:
 
 
 @pytest.fixture()
+def db(db_session: Session) -> Session:
+    return db_session
+
+
+@pytest.fixture()
 def client(db_session: Session) -> TestClient:
     settings.env = Env.dev
     app = create_app()

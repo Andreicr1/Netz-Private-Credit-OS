@@ -1,0 +1,114 @@
+{
+  "_version": "1.60.0",
+  "sap.app": {
+    "id": "netz.fund.os",
+    "type": "application",
+    "i18n": "i18n/i18n.properties",
+    "applicationVersion": {
+      "version": "0.0.1"
+    },
+    "title": "{{appTitle}}",
+    "description": "{{appDescription}}"
+  },
+  "sap.ui": {
+    "technology": "UI5",
+    "deviceTypes": {
+      "desktop": true,
+      "tablet": true,
+      "phone": true
+    }
+  },
+  "sap.ui5": {
+    "rootView": {
+      "viewName": "netz.fund.os.App",
+      "type": "XML",
+      "async": true,
+      "id": "app"
+    },
+    "dependencies": {
+      "minUI5Version": "1.96.0",
+      "libs": {
+        "sap.m": {},
+        "sap.f": {},
+        "sap.ui.core": {}
+      }
+    },
+    "contentDensities": {
+      "compact": true,
+      "cozy": true
+    },
+    "models": {
+      "i18n": {
+        "type": "sap.ui.model.resource.ResourceModel",
+        "settings": {
+          "bundleName": "netz.fund.os.i18n.i18n"
+        }
+      },
+      "device": {
+        "type": "sap.ui.model.json.JSONModel",
+        "settings": {
+          "oneWay": true
+        }
+      }
+    },
+    "routing": {
+      "config": {
+        "routerClass": "sap.m.routing.Router",
+        "viewType": "XML",
+        "viewPath": "netz.fund.os.pages",
+        "controlId": "detailNav",
+        "controlAggregation": "pages",
+        "async": true,
+        "bypassed": {
+          "target": "dashboard"
+        }
+      },
+      "routes": [
+        {
+          "pattern": "",
+          "name": "root",
+          "target": "dashboard"
+        },
+        {
+          "pattern": "dashboard",
+          "name": "dashboard",
+          "target": "dashboard"
+        },
+        {
+          "pattern": "dataroom",
+          "name": "dataroom",
+          "target": "dataroom"
+        },
+        {
+          "pattern": "cash",
+          "name": "cash",
+          "target": "cash"
+        },
+        {
+          "pattern": "compliance",
+          "name": "compliance",
+          "target": "compliance"
+        }
+      ],
+      "targets": {
+        "dashboard": {
+          "viewName": "Dashboard",
+          "viewId": "dashboard"
+        },
+        "dataroom": {
+          "viewName": "DataRoom",
+          "viewId": "dataroom"
+        },
+        "cash": {
+          "viewName": "CashManagement",
+          "viewId": "cash"
+        },
+        "compliance": {
+          "viewName": "Compliance",
+          "viewId": "compliance"
+        }
+      }
+    }
+  }
+}
+

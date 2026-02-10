@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from pathlib import Path
 
 from azure.core.exceptions import ResourceExistsError
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobClient, BlobServiceClient, ContentSettings
 
 from app.core.config import settings
+from app.shared.enums import Env
 
 
 @dataclass(frozen=True)
@@ -27,14 +29,35 @@ def _account_url() -> str:
     return f"https://{settings.AZURE_STORAGE_ACCOUNT}.blob.core.windows.net"
 
 
+def _use_local_storage() -> bool:
+    if settings.env == Env.prod:
+        return False
+    return not (settings.STORAGE_ACCOUNT_URL or settings.AZURE_STORAGE_ACCOUNT)
+
+
+def _local_base_dir() -> Path:
+    # repo_root/tmp/local_blob_storage/<container>/<blob_name>
+    repo_root = Path(__file__).resolve().parents[3]
+    return repo_root / "tmp" / "local_blob_storage"
+
+
+def _local_blob_path(*, container: str, blob_name: str) -> Path:
+    # blob_name may contain '/' which we treat as folders.
+    return _local_base_dir() / container / Path(blob_name)
+
+
 def _service_client() -> BlobServiceClient:
     # Uses Managed Identity on Azure App Service (DefaultAzureCredential).
     # In local dev, can use Azure CLI login (`az login`) or environment creds.
+    if _use_local_storage():
+        raise RuntimeError("Local storage mode does not use Azure BlobServiceClient")
     cred = DefaultAzureCredential(exclude_interactive_browser_credential=True)
     return BlobServiceClient(account_url=_account_url(), credential=cred)
 
 
 def blob_uri(container: str, blob_name: str) -> str:
+    if _use_local_storage():
+        return f"local://{container}/{blob_name}"
     base = _account_url()
     return f"{base}/{container}/{blob_name}"
 
@@ -49,6 +72,21 @@ def upload_bytes(
     metadata: dict[str, str] | None = None,
 ) -> BlobWriteResult:
     sha = hashlib.sha256(data).hexdigest()
+
+    if _use_local_storage():
+        path = _local_blob_path(container=container, blob_name=blob_name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists() and not overwrite:
+            raise ResourceExistsError("Blob already exists")
+        path.write_bytes(data)
+        return BlobWriteResult(
+            blob_uri=blob_uri(container, blob_name),
+            etag=None,
+            version_id=None,
+            sha256=sha,
+            size_bytes=len(data),
+        )
+
     svc = _service_client()
     bc: BlobClient = svc.get_blob_client(container=container, blob=blob_name)
 
@@ -71,6 +109,8 @@ def upload_bytes(
 
 
 def exists(*, container: str, blob_name: str) -> bool:
+    if _use_local_storage():
+        return _local_blob_path(container=container, blob_name=blob_name).exists()
     svc = _service_client()
     bc: BlobClient = svc.get_blob_client(container=container, blob=blob_name)
     try:
@@ -93,6 +133,20 @@ def upload_bytes_idempotent(
     Uses the provided bytes only to compute sha256 and size for auditing purposes.
     """
     sha = hashlib.sha256(data).hexdigest()
+
+    if _use_local_storage():
+        path = _local_blob_path(container=container, blob_name=blob_name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if not path.exists():
+            path.write_bytes(data)
+        return BlobWriteResult(
+            blob_uri=blob_uri(container, blob_name),
+            etag=None,
+            version_id=None,
+            sha256=sha,
+            size_bytes=len(data),
+        )
+
     svc = _service_client()
     bc: BlobClient = svc.get_blob_client(container=container, blob=blob_name)
     content_settings = ContentSettings(content_type=content_type) if content_type else None
@@ -124,6 +178,21 @@ def upload_bytes_append_only(
     Use for versioned dataroom documents (never overwrite).
     """
     sha = hashlib.sha256(data).hexdigest()
+
+    if _use_local_storage():
+        path = _local_blob_path(container=container, blob_name=blob_name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.exists():
+            raise ResourceExistsError("Blob already exists")
+        path.write_bytes(data)
+        return BlobWriteResult(
+            blob_uri=blob_uri(container, blob_name),
+            etag=None,
+            version_id=None,
+            sha256=sha,
+            size_bytes=len(data),
+        )
+
     svc = _service_client()
     bc: BlobClient = svc.get_blob_client(container=container, blob=blob_name)
     content_settings = ContentSettings(content_type=content_type) if content_type else None
@@ -144,6 +213,14 @@ def upload_bytes_append_only(
 
 
 def download_bytes(*, blob_uri: str) -> bytes:
+    if blob_uri.startswith("local://"):
+        rel = blob_uri.removeprefix("local://")
+        container, _, blob_name = rel.partition("/")
+        if not container or not blob_name:
+            raise ValueError("Invalid local blob URI")
+        path = _local_blob_path(container=container, blob_name=blob_name)
+        return path.read_bytes()
+
     cred = DefaultAzureCredential(exclude_interactive_browser_credential=True)
     bc = BlobClient.from_blob_url(blob_uri, credential=cred)
     stream = bc.download_blob()

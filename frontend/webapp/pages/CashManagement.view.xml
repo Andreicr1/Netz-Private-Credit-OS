@@ -1,0 +1,33 @@
+<mvc:View
+  controllerName="netz.fund.os.pages.CashManagement"
+  xmlns:mvc="sap.ui.core.mvc"
+  xmlns="sap.m"
+>
+  <Page title="Cash Management Ledger" showHeader="true">
+    <content>
+      <VBox class="sapUiSmallMargin" width="100%">
+        <Toolbar>
+          <Title text="Transactions" level="H3" />
+          <ToolbarSpacer />
+          <Button text="New Transaction" type="Emphasized" press="onNewTransaction" />
+        </Toolbar>
+
+        <Table id="txTable" inset="false" width="100%">
+          <columns>
+            <Column><Text text="Date" /></Column>
+            <Column><Text text="Type" /></Column>
+            <Column><Text text="Amount" /></Column>
+            <Column><Text text="Currency" /></Column>
+            <Column><Text text="Status" /></Column>
+          </columns>
+        </Table>
+
+        <MessageStrip
+          text="Approval workflow will be implemented in EPIC 5. This is UI structure only."
+          type="Information"
+          showIcon="true"
+        />
+      </VBox>
+    </content>
+  </Page>
+</mvc:View>

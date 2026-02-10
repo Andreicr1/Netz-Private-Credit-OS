@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import datetime as dt
 import uuid
+from decimal import Decimal
+from enum import Enum
 
 from sqlalchemy import inspect
 
@@ -25,6 +27,12 @@ def sa_model_to_dict(obj) -> dict:
             data[key] = str(val)
         elif isinstance(val, (dt.date, dt.datetime)):
             data[key] = val.isoformat()
+        elif isinstance(val, Decimal):
+            # Preserve exact value (avoid float rounding).
+            data[key] = str(val)
+        elif isinstance(val, Enum):
+            # Prefer stable wire/value representation.
+            data[key] = val.value
         else:
             data[key] = val
     return data
