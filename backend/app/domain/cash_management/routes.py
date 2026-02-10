@@ -4,11 +4,13 @@ import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db.session import get_db
 from app.core.security.rbac import require_role
-from app.domain.cash_management.enums import CashTransactionDirection
+from app.domain.cash_management.enums import CashTransactionDirection, CashTransactionStatus
+from app.domain.cash_management.models.cash import CashTransaction
 from app.domain.cash_management.service import (
     approve,
     create_transaction,
@@ -27,6 +29,60 @@ from app.domain.cash_management.services.reconciliation import (
 
 
 router = APIRouter(prefix="/funds/{fund_id}/cash", tags=["Cash Management"])
+
+
+def _tx_out(tx: CashTransaction) -> dict:
+    return {
+        "id": str(tx.id),
+        "fund_id": str(tx.fund_id),
+        "created_at": tx.created_at.isoformat() if tx.created_at else None,
+        "updated_at": tx.updated_at.isoformat() if tx.updated_at else None,
+        "value_date": tx.value_date.isoformat() if tx.value_date else None,
+        "type": tx.type.value,
+        "direction": tx.direction.value,
+        "amount": float(tx.amount),
+        "currency": tx.currency,
+        "status": tx.status.value,
+        "reference_code": tx.reference_code,
+        "beneficiary_name": tx.beneficiary_name,
+        "beneficiary_bank": tx.beneficiary_bank,
+        "beneficiary_account": tx.beneficiary_account,
+        "payment_reference": tx.payment_reference,
+        "justification_text": tx.justification_text,
+        "policy_basis": tx.policy_basis,
+        "investment_memo_document_id": str(tx.investment_memo_document_id) if tx.investment_memo_document_id else None,
+        "ic_approvals_count": int(tx.ic_approvals_count or 0),
+        "sent_to_admin_at": tx.sent_to_admin_at.isoformat() if tx.sent_to_admin_at else None,
+        "admin_contact": tx.admin_contact,
+        "execution_confirmed_at": tx.execution_confirmed_at.isoformat() if tx.execution_confirmed_at else None,
+        "bank_reference": tx.bank_reference,
+        "notes": tx.notes,
+        "instructions_blob_uri": tx.instructions_blob_uri,
+        "evidence_bundle_blob_uri": tx.evidence_bundle_blob_uri,
+        "evidence_bundle_sha256": tx.evidence_bundle_sha256,
+    }
+
+
+@router.get("/transactions")
+def list_transactions(
+    fund_id: uuid.UUID,
+    status: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    actor=Depends(require_role(["INVESTMENT_TEAM", "COMPLIANCE", "GP", "ADMIN", "AUDITOR"])),
+):
+    _require_fund_access(fund_id, actor)
+
+    stmt = select(CashTransaction).where(CashTransaction.fund_id == fund_id)
+    if status:
+        try:
+            st = CashTransactionStatus(status)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid status")
+        stmt = stmt.where(CashTransaction.status == st)
+    stmt = stmt.order_by(CashTransaction.created_at.desc())
+
+    txs = list(db.execute(stmt).scalars().all())
+    return {"items": [_tx_out(tx) for tx in txs]}
 
 
 def _require_fund_access(fund_id: uuid.UUID, actor) -> None:
