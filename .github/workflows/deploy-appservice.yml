@@ -26,12 +26,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create deploy.zip (root contains only backend/)
+      - name: Create deploy.zip (root contains backend/ + .deployment)
         shell: bash
         run: |
           set -euo pipefail
           rm -f deploy.zip
-          zip -r deploy.zip backend \
+          cat > .deployment <<'EOF'
+          [config]
+          SCM_DO_BUILD_DURING_DEPLOYMENT = true
+          project = backend
+          EOF
+
+          zip -r deploy.zip backend .deployment \
             -x "backend/__pycache__/*" \
                "backend/.pytest_cache/*" \
                "backend/**/__pycache__/*" \
@@ -47,17 +53,19 @@ jobs:
           z = zipfile.ZipFile('deploy.zip')
           bad = []
           for name in z.namelist():
-              if name.startswith('backend/') or name == 'backend/':
+            if name.startswith('backend/') or name == 'backend/':
+              continue
+            if name == '.deployment':
                   continue
               bad.append(name)
 
           if bad:
-              print('ERROR: deploy.zip contains entries outside backend/:')
+            print('ERROR: deploy.zip contains unexpected entries (allowed: backend/ and .deployment):')
               for n in bad[:50]:
                   print(' -', n)
               sys.exit(1)
 
-          print('OK: deploy.zip contains only backend/')
+          print('OK: deploy.zip contains only backend/ and .deployment')
           PY
 
       - name: Azure Login (OIDC)
