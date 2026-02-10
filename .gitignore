@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.pytest_cache/
+
+# Local artifacts / deployments
+*.zip
+appservice_logs/
+appservice_logs.zip
+logs_unzipped/
+logs*_unzipped/
+logs*.zip
+backend_deploy*.zip
+deploy.zip
+
+# Temp
+.tmp/
+tmp/
+
+# Data room (potentially sensitive documents)
+Data Room/

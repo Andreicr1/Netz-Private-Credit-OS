@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": { "value": "eastus" },
+    "rgName": { "value": "Netz-International" },
+    "project": { "value": "netz" },
+    "env": { "value": "prod" },
+    "kvName": { "value": "netz-prod-kv" },
+    "operatorObjectId": { "value": "ce5b1f19-eeea-4995-a5ea-5db0ed9bc74a" },
+    "storageName": { "value": "netzprodstorage01" },
+    "dbServerName": { "value": "netz-prod-psql" },
+    "dbName": { "value": "netz_platform" },
+    "dbAdminUser": { "value": "netzadmin" },
+    "deployPostgres": { "value": false },
+    "deployCompute": { "value": false },
+    "planName": { "value": "netz-prod-plan" },
+    "appName": { "value": "netz-prod-api" },
+    "lawName": { "value": "netz-prod-logs" },
+    "appInsightsName": { "value": "netz-prod-insights" },
+    "searchServiceName": { "value": "netz-internacional-search" },
+    "searchIndexName": { "value": "fund-documents-index" }
+  }
+}
