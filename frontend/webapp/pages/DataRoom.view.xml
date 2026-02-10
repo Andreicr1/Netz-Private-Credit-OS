@@ -13,7 +13,7 @@
         </Toolbar>
 
         <MessageStrip
-          text="{= ${dataroom>/status} === 'error' ? 'Failed to load documents from backend.' : '' }"
+          text="{= ${dataroom>/status} === 'error' ? (${dataroom>/errorMessage} || 'Failed to load documents from backend.') : '' }"
           type="Error"
           showIcon="true"
           visible="{= ${dataroom>/status} === 'error' }"
@@ -40,11 +40,11 @@
           <items>
             <ColumnListItem>
               <cells>
-                <Text text="{= ${dataroom>rootFolder} || ${dataroom>root_folder} || ${dataroom>root} || '' }" />
-                <Text text="{= ${dataroom>folderPath} || ${dataroom>folder_path} || ${dataroom>path} || '' }" />
-                <Text text="{= ${dataroom>title} || ${dataroom>name} || '' }" />
-                <Text text="{= ${dataroom>updatedAt} || ${dataroom>updated_at} || ${dataroom>last_modified} || '' }" />
-                <Text text="{= ${dataroom>domain} || ${dataroom>category} || '' }" />
+                <Text text="{dataroom>root_folder}" />
+                <Text text="{dataroom>folder_path}" />
+                <Text text="{dataroom>title}" />
+                <Text text="{dataroom>updated_at}" />
+                <Text text="{dataroom>domain}" />
               </cells>
             </ColumnListItem>
           </items>

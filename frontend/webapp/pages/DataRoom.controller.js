@@ -8,9 +8,9 @@ sap.ui.define([
   function getFundIdFromUrl() {
     try {
       var url = new URL(window.location.href);
-      return url.searchParams.get("fundId") || "static-fund-id";
+      return url.searchParams.get("fundId") || "00000000-0000-0000-0000-000000000000";
     } catch (e) {
-      return "static-fund-id";
+      return "00000000-0000-0000-0000-000000000000";
     }
   }
 
@@ -29,7 +29,7 @@ sap.ui.define([
 
   return Controller.extend("netz.fund.os.pages.DataRoom", {
     onInit: function () {
-      this.getView().setModel(new JSONModel({ items: [], status: "idle" }), "dataroom");
+      this.getView().setModel(new JSONModel({ items: [], status: "idle", errorMessage: "" }), "dataroom");
       this._fundId = getFundIdFromUrl();
       this._load();
     },
@@ -45,6 +45,7 @@ sap.ui.define([
       try {
         view.setBusy(true);
         model.setProperty("/status", "loading");
+        model.setProperty("/errorMessage", "");
 
         var payload = await api.fetchDocuments(this._fundId);
         model.setProperty("/items", extractItems(payload));
@@ -52,6 +53,7 @@ sap.ui.define([
       } catch (e) {
         model.setProperty("/items", []);
         model.setProperty("/status", "error");
+        model.setProperty("/errorMessage", (e && e.message) ? e.message : String(e));
       } finally {
         view.setBusy(false);
       }
