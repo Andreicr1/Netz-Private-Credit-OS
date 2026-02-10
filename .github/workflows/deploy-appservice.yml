@@ -104,7 +104,8 @@ jobs:
             --name "${AZURE_WEBAPP_NAME}" \
             --settings \
               SCM_DO_BUILD_DURING_DEPLOYMENT=false \
-              WEBSITE_RUN_FROM_PACKAGE=1
+              WEBSITE_RUN_FROM_PACKAGE=1 \
+              PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages
 
           # Use single-quotes for assignment so $PORT is not expanded on the runner.
           # App Service will expand $PORT at runtime inside the inner double-quotes.
