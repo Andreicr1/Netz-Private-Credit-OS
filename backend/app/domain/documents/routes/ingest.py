@@ -12,7 +12,8 @@ from app.core.security.auth import Actor
 from app.core.security.dependencies import get_actor, require_readonly_allowed, require_roles
 from app.domain.documents.services.ingestion_worker import process_pending_versions
 from app.domain.documents import service
-from app.modules.documents.schemas import DocumentOut, Page
+from app.modules.documents.models import Document, DocumentVersion
+from app.modules.documents.schemas import DocumentOut, DocumentVersionOut, Page
 from app.shared.enums import Role
 
 
@@ -91,6 +92,47 @@ def list_docs(
         title_q=q,
     )
     return Page(items=items, limit=limit, offset=offset)
+
+
+@router.get("/root-folders")
+def list_root_folders(
+    fund_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _role_guard: Actor = Depends(require_roles([Role.ADMIN, Role.GP, Role.COMPLIANCE, Role.INVESTMENT_TEAM, Role.AUDITOR])),
+):
+    """List allowed root folders (canonical + active custom), for governed UI selects."""
+    items = sorted(service.allowed_root_folders(db, fund_id=fund_id))
+    return {"items": items}
+
+
+@router.get("/{document_id}", response_model=DocumentOut)
+def get_document(
+    fund_id: uuid.UUID,
+    document_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _role_guard: Actor = Depends(require_roles([Role.ADMIN, Role.GP, Role.COMPLIANCE, Role.INVESTMENT_TEAM, Role.AUDITOR])),
+):
+    doc = db.query(Document).filter(Document.fund_id == fund_id).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return doc
+
+
+@router.get("/{document_id}/versions", response_model=list[DocumentVersionOut])
+def list_document_versions(
+    fund_id: uuid.UUID,
+    document_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    _role_guard: Actor = Depends(require_roles([Role.ADMIN, Role.GP, Role.COMPLIANCE, Role.INVESTMENT_TEAM, Role.AUDITOR])),
+):
+    vers = (
+        db.query(DocumentVersion)
+        .filter(DocumentVersion.fund_id == fund_id)
+        .filter(DocumentVersion.document_id == document_id)
+        .order_by(DocumentVersion.version_number.asc())
+        .all()
+    )
+    return vers
 
 
 @router.post("/root-folders", status_code=status.HTTP_201_CREATED)
