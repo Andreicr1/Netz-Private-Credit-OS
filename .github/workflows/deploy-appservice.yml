@@ -103,6 +103,36 @@ jobs:
           # Avoid SCM restarts racing with zip deploy
           sleep 20
 
+      - name: Wait for ongoing deployments
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Kudu may reject zip deploy with 409 if another deployment is running.
+          for i in $(seq 1 240); do
+            status=$(az webapp log deployment list \
+              --resource-group "${AZURE_RESOURCE_GROUP}" \
+              --name "${AZURE_WEBAPP_NAME}" \
+              --query "[0].status" -o tsv || true)
+
+            # status 0=receiving changes, 1=building/deploying
+            if [[ "${status}" != "0" && "${status}" != "1" ]]; then
+              echo "No ongoing deployment detected (latest status=${status})."
+              exit 0
+            fi
+
+            echo "Ongoing deployment detected (latest status=${status}). Waiting 30s..."
+            sleep 30
+          done
+
+          echo "Timed out waiting for ongoing deployment to finish. Latest deployments:"
+          az webapp log deployment list \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --query "[0:5].{id:id,status:status,status_text:status_text,progress:progress,start_time:start_time,end_time:end_time}" \
+            -o table
+          exit 1
+
       - name: Zip Deploy
         shell: bash
         run: |
