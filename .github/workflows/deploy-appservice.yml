@@ -1,0 +1,130 @@
+name: Deploy (Azure App Service)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-appservice-main
+  cancel-in-progress: true
+
+env:
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+  AZURE_WEBAPP_URL: ${{ vars.AZURE_WEBAPP_URL }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create deploy.zip (root contains only backend/)
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f deploy.zip
+          zip -r deploy.zip backend \
+            -x "backend/__pycache__/*" \
+               "backend/.pytest_cache/*" \
+               "backend/**/__pycache__/*" \
+               "backend/**/.pytest_cache/*"
+
+      - name: Validate deploy.zip structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import sys, zipfile
+
+          z = zipfile.ZipFile('deploy.zip')
+          bad = []
+          for name in z.namelist():
+              if name.startswith('backend/') or name == 'backend/':
+                  continue
+              bad.append(name)
+
+          if bad:
+              print('ERROR: deploy.zip contains entries outside backend/:')
+              for n in bad[:50]:
+                  print(' -', n)
+              sys.exit(1)
+
+          print('OK: deploy.zip contains only backend/')
+          PY
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Configure App Service build + startup
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${AZURE_RESOURCE_GROUP}" || -z "${AZURE_WEBAPP_NAME}" ]]; then
+            echo "Missing vars.AZURE_RESOURCE_GROUP or vars.AZURE_WEBAPP_NAME"
+            exit 1
+          fi
+
+          az webapp config appsettings set \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --settings \
+              SCM_DO_BUILD_DURING_DEPLOYMENT=true \
+              POST_BUILD_COMMAND="python -m pip install -r backend/requirements.txt"
+
+          STARTUP_CMD="bash -c 'cd backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:\\$PORT --timeout 120'"
+          az webapp config set \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --startup-file "${STARTUP_CMD}"
+
+          # Avoid SCM restarts racing with zip deploy
+          sleep 20
+
+      - name: Zip Deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          az webapp deployment source config-zip \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --src deploy.zip
+
+      - name: Smoke test /health
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -n "${AZURE_WEBAPP_URL}" ]]; then
+            BASE_URL="${AZURE_WEBAPP_URL%/}"
+          else
+            BASE_URL="https://${AZURE_WEBAPP_NAME}.azurewebsites.net"
+          fi
+
+          HEALTH_URL="${BASE_URL}/health"
+          echo "Checking: ${HEALTH_URL}"
+
+          for i in $(seq 1 30); do
+            if curl -fsS "${HEALTH_URL}"; then
+              echo
+              echo "OK"
+              exit 0
+            fi
+            echo "Attempt ${i}/30 failed; waiting 5s..."
+            sleep 5
+          done
+
+          echo "Smoke test failed after retries"
+          exit 1
