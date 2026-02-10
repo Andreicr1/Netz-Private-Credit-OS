@@ -103,7 +103,7 @@ jobs:
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --name "${AZURE_WEBAPP_NAME}" \
             --src deploy.zip \
-            --timeout 1800 \
+            --timeout 7200 \
             --track-status false
 
       - name: Smoke test /health
