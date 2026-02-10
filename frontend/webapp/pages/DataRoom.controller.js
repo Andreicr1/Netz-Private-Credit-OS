@@ -1,8 +1,8 @@
 sap.ui.define([
   "sap/ui/core/mvc/Controller",
   "sap/ui/model/json/JSONModel",
-  "netz/fund/os/services/api"
-], function (Controller, JSONModel, api) {
+  "netz/fund/os/api/documents"
+], function (Controller, JSONModel, documentsApi) {
   "use strict";
 
   function getFundIdFromUrl() {
@@ -47,7 +47,7 @@ sap.ui.define([
         model.setProperty("/status", "loading");
         model.setProperty("/errorMessage", "");
 
-        var payload = await api.fetchDocuments(this._fundId);
+        var payload = await documentsApi.listDocuments(this._fundId);
         model.setProperty("/items", extractItems(payload));
         model.setProperty("/status", "ready");
       } catch (e) {
