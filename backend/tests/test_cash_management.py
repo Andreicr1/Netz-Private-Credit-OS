@@ -61,6 +61,7 @@ def test_usd_only_enforcement(db: Session, fund_id: uuid.UUID, actor: Actor):
     payload = {
         "type": CashTransactionType.FUND_EXPENSE.value,
         "amount": 1000.00,
+        "value_date": date.today().isoformat(),
         "currency": "EUR",  # NOT ALLOWED
     }
     
@@ -76,6 +77,7 @@ def test_investment_requires_ic_approval(db: Session, fund_id: uuid.UUID, actor:
     payload = {
         "type": CashTransactionType.INVESTMENT.value,
         "amount": 500000.00,
+        "value_date": date.today().isoformat(),
         "investment_memo_document_id": str(uuid.uuid4()),
     }
     tx = create_transaction(db, fund_id=fund_id, actor=actor, payload=payload)
@@ -146,6 +148,7 @@ def test_expense_requires_justification(db: Session, fund_id: uuid.UUID, actor: 
     payload = {
         "type": CashTransactionType.FUND_EXPENSE.value,
         "amount": 10000.00,
+        "value_date": date.today().isoformat(),
         # Missing justification_text and policy_basis
     }
     tx = create_transaction(db, fund_id=fund_id, actor=actor, payload=payload)
@@ -177,6 +180,7 @@ def test_dual_signature_requirement(db: Session, fund_id: uuid.UUID, actor: Acto
     payload = {
         "type": CashTransactionType.TRANSFER_INTERNAL.value,
         "amount": 5000.00,
+        "value_date": date.today().isoformat(),
     }
     tx = create_transaction(db, fund_id=fund_id, actor=actor, payload=payload)
     tx = submit_transaction(db, fund_id=fund_id, actor=actor, tx_id=tx.id)
@@ -226,6 +230,7 @@ def test_state_machine_transitions(db: Session, fund_id: uuid.UUID, actor: Actor
     payload = {
         "type": CashTransactionType.BANK_FEE.value,
         "amount": 25.00,
+        "value_date": date.today().isoformat(),
     }
     tx = create_transaction(db, fund_id=fund_id, actor=actor, payload=payload)
     
@@ -261,7 +266,7 @@ def test_direction_inference(db: Session, fund_id: uuid.UUID, actor: Actor):
         db,
         fund_id=fund_id,
         actor=actor,
-        payload={"type": CashTransactionType.LP_SUBSCRIPTION.value, "amount": 1000000.00},
+        payload={"type": CashTransactionType.LP_SUBSCRIPTION.value, "amount": 1000000.00, "value_date": date.today().isoformat()},
     )
     assert tx_sub.direction == CashTransactionDirection.INFLOW
     
@@ -270,7 +275,7 @@ def test_direction_inference(db: Session, fund_id: uuid.UUID, actor: Actor):
         db,
         fund_id=fund_id,
         actor=actor,
-        payload={"type": CashTransactionType.INVESTMENT.value, "amount": 500000.00},
+        payload={"type": CashTransactionType.INVESTMENT.value, "amount": 500000.00, "value_date": date.today().isoformat()},
     )
     assert tx_inv.direction == CashTransactionDirection.OUTFLOW
     
@@ -279,7 +284,7 @@ def test_direction_inference(db: Session, fund_id: uuid.UUID, actor: Actor):
         db,
         fund_id=fund_id,
         actor=actor,
-        payload={"type": CashTransactionType.BANK_FEE.value, "amount": 50.00},
+        payload={"type": CashTransactionType.BANK_FEE.value, "amount": 50.00, "value_date": date.today().isoformat()},
     )
     assert tx_fee.direction == CashTransactionDirection.OUTFLOW
 
@@ -292,7 +297,7 @@ def test_reference_code_generation(db: Session, fund_id: uuid.UUID, actor: Actor
         db,
         fund_id=fund_id,
         actor=actor,
-        payload={"type": CashTransactionType.INVESTMENT.value, "amount": 100000.00},
+        payload={"type": CashTransactionType.INVESTMENT.value, "amount": 100000.00, "value_date": date.today().isoformat()},
     )
     assert tx1.reference_code is not None
     assert "INV" in tx1.reference_code
@@ -301,7 +306,7 @@ def test_reference_code_generation(db: Session, fund_id: uuid.UUID, actor: Actor
         db,
         fund_id=fund_id,
         actor=actor,
-        payload={"type": CashTransactionType.CAPITAL_CALL.value, "amount": 50000.00},
+        payload={"type": CashTransactionType.CAPITAL_CALL.value, "amount": 50000.00, "value_date": date.today().isoformat()},
     )
     assert tx2.reference_code is not None
     assert "CAP" in tx2.reference_code
@@ -320,6 +325,7 @@ def test_bank_statement_reconciliation(db: Session, fund_id: uuid.UUID, actor: A
         payload={
             "type": CashTransactionType.FUND_EXPENSE.value,
             "amount": 5000.00,
+            "value_date": date.today().isoformat(),
             "payment_reference": "LEGAL-FEE-2024",
             "justification_text": "Legal fees for fund setup",
             "policy_basis": [{"section": "3.2", "excerpt": "Legal and professional fees"}],
@@ -379,6 +385,7 @@ def test_audit_events_emitted(db: Session, fund_id: uuid.UUID, actor: Actor):
     payload = {
         "type": CashTransactionType.TRANSFER_INTERNAL.value,
         "amount": 1000.00,
+        "value_date": date.today().isoformat(),
     }
     
     # Create transaction

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, JSON, Numeric, String
+from sqlalchemy import CheckConstraint, Date, DateTime, Enum as SAEnum, ForeignKey, Index, Integer, JSON, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db.base import AuditMetaMixin, Base, FundScopedMixin, IdMixin
@@ -62,6 +62,7 @@ class CashTransaction(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
     )
     amount: Mapped[float] = mapped_column(Numeric(20, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False, server_default="USD")
+    value_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     reference_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True, unique=True)
     status: Mapped[CashTransactionStatus] = mapped_column(
         SAEnum(CashTransactionStatus, name="cash_tx_status_enum"),

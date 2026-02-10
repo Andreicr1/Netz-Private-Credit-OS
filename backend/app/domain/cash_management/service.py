@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from sqlalchemy import select
@@ -99,6 +99,14 @@ def create_transaction(
     """
     validate_usd_only(payload.get("currency") or USD)
 
+    value_date_raw = payload.get("value_date")
+    if not value_date_raw:
+        raise ValueError("value_date is required")
+    if isinstance(value_date_raw, date):
+        value_date = value_date_raw
+    else:
+        value_date = date.fromisoformat(str(value_date_raw))
+
     tx_type = CashTransactionType(payload["type"])
     direction = payload.get("direction")
     if not direction:
@@ -117,6 +125,7 @@ def create_transaction(
         direction=direction,
         amount=payload["amount"],
         currency=USD,
+        value_date=value_date,
         reference_code=_generate_reference_code(fund_id, tx_type),
         status=CashTransactionStatus.DRAFT,
         beneficiary_name=payload.get("beneficiary_name"),
