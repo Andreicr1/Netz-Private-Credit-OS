@@ -53,14 +53,14 @@ jobs:
           z = zipfile.ZipFile('deploy.zip')
           bad = []
           for name in z.namelist():
-            if name.startswith('backend/') or name == 'backend/':
-              continue
-            if name == '.deployment':
+              if name.startswith('backend/') or name == 'backend/':
+                  continue
+              if name == '.deployment':
                   continue
               bad.append(name)
 
           if bad:
-            print('ERROR: deploy.zip contains unexpected entries (allowed: backend/ and .deployment):')
+              print('ERROR: deploy.zip contains unexpected entries (allowed: backend/ and .deployment):')
               for n in bad[:50]:
                   print(' -', n)
               sys.exit(1)
