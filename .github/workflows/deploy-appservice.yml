@@ -84,7 +84,9 @@ jobs:
               SCM_DO_BUILD_DURING_DEPLOYMENT=true \
               POST_BUILD_COMMAND="python -m pip install -r backend/requirements.txt"
 
-          STARTUP_CMD="bash -c 'cd backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:\\$PORT --timeout 120'"
+          # Use single-quotes for assignment so $PORT is not expanded on the runner.
+          # App Service will expand $PORT at runtime inside the inner double-quotes.
+          STARTUP_CMD='bash -c "cd backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120"'
           az webapp config set \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --name "${AZURE_WEBAPP_NAME}" \
