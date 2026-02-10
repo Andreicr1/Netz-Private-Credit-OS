@@ -137,11 +137,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          az webapp deployment source config-zip \
+          # Use the current Azure CLI deployment command.
+          # NOTE: --timeout is in milliseconds for `az webapp deploy`.
+          az webapp deploy \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --name "${AZURE_WEBAPP_NAME}" \
-            --src deploy.zip \
-            --timeout 7200 \
+            --type zip \
+            --src-path deploy.zip \
+            --timeout 7200000 \
             --track-status false
 
       - name: Smoke test /health
