@@ -17,6 +17,7 @@ from app.domain.cash_management.service import (
     generate_instructions,
     mark_executed,
     mark_sent_to_admin,
+    reject_transaction,
     submit_transaction,
 )
 from app.domain.cash_management.services.reconciliation import (
@@ -171,6 +172,69 @@ def approve_ic(
             "ic_approvals_count": int(tx.ic_approvals_count),
             "approval_id": str(appr.id),
         }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/transactions/{tx_id}/approve")
+def approve_any(
+    fund_id: uuid.UUID,
+    tx_id: uuid.UUID,
+    payload: dict,
+    db: Session = Depends(get_db),
+    actor=Depends(require_role(["INVESTMENT_TEAM", "GP", "ADMIN"])),
+):
+    """Unified approval endpoint.
+
+    Payload:
+      - approver_role: DIRECTOR | IC_MEMBER
+      - approver_name: optional (defaults to actor_id)
+      - comment: optional
+      - evidence_blob_uri: optional
+    """
+    _require_fund_access(fund_id, actor)
+
+    role = payload.get("approver_role") or payload.get("role")
+    if role not in ("DIRECTOR", "IC_MEMBER"):
+        raise HTTPException(status_code=400, detail="approver_role must be DIRECTOR or IC_MEMBER")
+
+    actor_roles = set(getattr(actor, "roles", []) or [])
+    if role == "DIRECTOR" and not ("GP" in actor_roles or "ADMIN" in actor_roles):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    if role == "IC_MEMBER" and not ("INVESTMENT_TEAM" in actor_roles or "ADMIN" in actor_roles):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    try:
+        tx, appr = approve(
+            db,
+            fund_id=fund_id,
+            actor=actor,
+            tx_id=tx_id,
+            approver_role=role,
+            approver_name=str(payload.get("approver_name") or actor.actor_id),
+            comment=payload.get("comment"),
+            evidence_blob_uri=payload.get("evidence_blob_url") or payload.get("evidence_blob_uri"),
+        )
+        out = {"transaction_id": str(tx.id), "status": tx.status.value, "approval_id": str(appr.id)}
+        if role == "IC_MEMBER":
+            out["ic_approvals_count"] = int(tx.ic_approvals_count)
+        return out
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/transactions/{tx_id}/reject")
+def reject(
+    fund_id: uuid.UUID,
+    tx_id: uuid.UUID,
+    payload: dict,
+    db: Session = Depends(get_db),
+    actor=Depends(require_role(["INVESTMENT_TEAM", "GP", "ADMIN"])),
+):
+    _require_fund_access(fund_id, actor)
+    try:
+        tx = reject_transaction(db, fund_id=fund_id, actor=actor, tx_id=tx_id, comment=payload.get("comment"))
+        return {"transaction_id": str(tx.id), "status": tx.status.value}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

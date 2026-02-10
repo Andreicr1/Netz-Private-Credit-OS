@@ -189,6 +189,44 @@ def submit_transaction(db: Session, *, fund_id: uuid.UUID, actor: Actor, tx_id: 
     return tx
 
 
+def reject_transaction(
+    db: Session,
+    *,
+    fund_id: uuid.UUID,
+    actor: Actor,
+    tx_id: uuid.UUID,
+    comment: str | None,
+) -> CashTransaction:
+    """Move transaction to REJECTED.
+
+    The rejection rationale is preserved as an append-only audit event payload.
+    """
+    tx = db.execute(select(CashTransaction).where(CashTransaction.fund_id == fund_id, CashTransaction.id == tx_id)).scalar_one()
+
+    allowed, error = can_transition(db, tx=tx, to_status=CashTransactionStatus.REJECTED)
+    if not allowed:
+        raise ValueError(error)
+
+    before = sa_model_to_dict(tx)
+    tx.status = CashTransactionStatus.REJECTED
+    tx.updated_by = actor.actor_id
+
+    write_audit_event(
+        db,
+        fund_id=fund_id,
+        actor_id=actor.actor_id,
+        action="CASH_TRANSACTION_REJECTED",
+        entity_type="cash_transaction",
+        entity_id=tx.id,
+        before=before,
+        after={**sa_model_to_dict(tx), "reject_comment": comment},
+    )
+
+    db.commit()
+    db.refresh(tx)
+    return tx
+
+
 def approve(
     db: Session,
     *,
