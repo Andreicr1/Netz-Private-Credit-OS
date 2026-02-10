@@ -26,6 +26,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build Python dependencies (prebuilt)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -U pip
+          rm -rf .python_packages
+          python -m pip install -r backend/requirements.txt --target .python_packages/lib/site-packages
+
       - name: Create deploy.zip (root contains backend/ + .deployment)
         shell: bash
         run: |
@@ -33,11 +46,10 @@ jobs:
           rm -f deploy.zip
           cat > .deployment <<'EOF'
           [config]
-          SCM_DO_BUILD_DURING_DEPLOYMENT = true
           project = backend
           EOF
 
-          zip -r deploy.zip backend .deployment \
+          zip -r deploy.zip backend .python_packages .deployment \
             -x "backend/__pycache__/*" \
                "backend/.pytest_cache/*" \
                "backend/**/__pycache__/*" \
@@ -55,17 +67,19 @@ jobs:
           for name in z.namelist():
               if name.startswith('backend/') or name == 'backend/':
                   continue
+              if name.startswith('.python_packages/') or name == '.python_packages/':
+                  continue
               if name == '.deployment':
                   continue
               bad.append(name)
 
           if bad:
-              print('ERROR: deploy.zip contains unexpected entries (allowed: backend/ and .deployment):')
+              print('ERROR: deploy.zip contains unexpected entries (allowed: backend/, .python_packages/, and .deployment):')
               for n in bad[:50]:
                   print(' -', n)
               sys.exit(1)
 
-          print('OK: deploy.zip contains only backend/ and .deployment')
+          print('OK: deploy.zip contains only backend/, .python_packages/, and .deployment')
           PY
 
       - name: Azure Login (OIDC)
@@ -89,8 +103,8 @@ jobs:
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --name "${AZURE_WEBAPP_NAME}" \
             --settings \
-              SCM_DO_BUILD_DURING_DEPLOYMENT=true \
-              POST_BUILD_COMMAND="python -m pip install -r backend/requirements.txt"
+              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+              WEBSITE_RUN_FROM_PACKAGE=1
 
           # Use single-quotes for assignment so $PORT is not expanded on the runner.
           # App Service will expand $PORT at runtime inside the inner double-quotes.
