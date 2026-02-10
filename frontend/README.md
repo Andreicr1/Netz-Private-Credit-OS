@@ -27,3 +27,5 @@ For now, the Data Room page uses a static fund id by default.
 You can override it via query string:
 
 - http://localhost:8080/webapp/index.html#/dataroom?fundId=YOUR_FUND_ID
+
+Note: `fundId` must be a UUID string (backend path parameter).
