@@ -26,7 +26,7 @@ from app.domain.cash_management.services.reconciliation import (
 )
 
 
-router = APIRouter(prefix="/api/cash", tags=["Cash Management"])
+router = APIRouter(prefix="/funds/{fund_id}/cash", tags=["Cash Management"])
 
 
 def _require_fund_access(fund_id: uuid.UUID, actor) -> None:
@@ -36,13 +36,11 @@ def _require_fund_access(fund_id: uuid.UUID, actor) -> None:
 
 @router.post("/transactions")
 def create_tx(
+    fund_id: uuid.UUID,
     payload: dict,
     db: Session = Depends(get_db),
     actor=Depends(require_role(["INVESTMENT_TEAM", "COMPLIANCE", "GP", "ADMIN"])),
 ):
-    if "fund_id" not in payload:
-        raise HTTPException(status_code=400, detail="fund_id is required")
-    fund_id = uuid.UUID(str(payload["fund_id"]))
     _require_fund_access(fund_id, actor)
     try:
         tx = create_transaction(db, fund_id=fund_id, actor=actor, payload=payload)
@@ -53,8 +51,8 @@ def create_tx(
 
 @router.post("/transactions/{tx_id}/submit")
 def submit(
+    fund_id: uuid.UUID,
     tx_id: uuid.UUID,
-    fund_id: uuid.UUID = Query(...),
     db: Session = Depends(get_db),
     actor=Depends(require_role(["INVESTMENT_TEAM", "COMPLIANCE", "GP", "ADMIN"])),
 ):
@@ -68,14 +66,12 @@ def submit(
 
 @router.post("/transactions/{tx_id}/approve/director")
 def approve_director(
+    fund_id: uuid.UUID,
     tx_id: uuid.UUID,
     payload: dict,
     db: Session = Depends(get_db),
     actor=Depends(require_role(["GP", "ADMIN"])),
 ):
-    if "fund_id" not in payload:
-        raise HTTPException(status_code=400, detail="fund_id is required")
-    fund_id = uuid.UUID(str(payload["fund_id"]))
     _require_fund_access(fund_id, actor)
     try:
         tx, appr = approve(
@@ -95,14 +91,12 @@ def approve_director(
 
 @router.post("/transactions/{tx_id}/approve/ic")
 def approve_ic(
+    fund_id: uuid.UUID,
     tx_id: uuid.UUID,
     payload: dict,
     db: Session = Depends(get_db),
     actor=Depends(require_role(["INVESTMENT_TEAM", "ADMIN"])),
 ):
-    if "fund_id" not in payload:
-        raise HTTPException(status_code=400, detail="fund_id is required")
-    fund_id = uuid.UUID(str(payload["fund_id"]))
     _require_fund_access(fund_id, actor)
     try:
         tx, appr = approve(
@@ -127,8 +121,8 @@ def approve_ic(
 
 @router.post("/transactions/{tx_id}/generate-instructions")
 def gen_instructions(
+    fund_id: uuid.UUID,
     tx_id: uuid.UUID,
-    fund_id: uuid.UUID = Query(...),
     db: Session = Depends(get_db),
     actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN"])),
 ):
@@ -142,14 +136,12 @@ def gen_instructions(
 
 @router.post("/transactions/{tx_id}/mark-sent")
 def mark_sent(
+    fund_id: uuid.UUID,
     tx_id: uuid.UUID,
     payload: dict,
     db: Session = Depends(get_db),
     actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN"])),
 ):
-    if "fund_id" not in payload:
-        raise HTTPException(status_code=400, detail="fund_id is required")
-    fund_id = uuid.UUID(str(payload["fund_id"]))
     _require_fund_access(fund_id, actor)
     try:
         tx = mark_sent_to_admin(db, fund_id=fund_id, actor=actor, tx_id=tx_id, admin_contact=payload.get("admin_contact"))
@@ -160,14 +152,12 @@ def mark_sent(
 
 @router.post("/transactions/{tx_id}/mark-executed")
 def mark_exec(
+    fund_id: uuid.UUID,
     tx_id: uuid.UUID,
     payload: dict,
     db: Session = Depends(get_db),
     actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN"])),
 ):
-    if "fund_id" not in payload:
-        raise HTTPException(status_code=400, detail="fund_id is required")
-    fund_id = uuid.UUID(str(payload["fund_id"]))
     _require_fund_access(fund_id, actor)
     try:
         tx = mark_executed(
@@ -188,6 +178,7 @@ def mark_exec(
 
 @router.post("/statements/upload")
 def upload_statement(
+    fund_id: uuid.UUID,
     payload: dict,
     db: Session = Depends(get_db),
     actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN"])),
@@ -196,9 +187,6 @@ def upload_statement(
     Upload a bank statement for reconciliation.
     Stores statement metadata in registry.
     """
-    if "fund_id" not in payload:
-        raise HTTPException(status_code=400, detail="fund_id is required")
-    fund_id = uuid.UUID(str(payload["fund_id"]))
     _require_fund_access(fund_id, actor)
     
     try:
@@ -228,6 +216,7 @@ def upload_statement(
 
 @router.post("/statements/{statement_id}/lines")
 def add_line(
+    fund_id: uuid.UUID,
     statement_id: uuid.UUID,
     payload: dict,
     db: Session = Depends(get_db),
@@ -236,9 +225,6 @@ def add_line(
     """
     Add a manual statement line for reconciliation.
     """
-    if "fund_id" not in payload:
-        raise HTTPException(status_code=400, detail="fund_id is required")
-    fund_id = uuid.UUID(str(payload["fund_id"]))
     _require_fund_access(fund_id, actor)
     
     try:
@@ -268,6 +254,7 @@ def add_line(
 
 @router.post("/reconcile")
 def reconcile(
+    fund_id: uuid.UUID,
     payload: dict,
     db: Session = Depends(get_db),
     actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN"])),
@@ -275,9 +262,6 @@ def reconcile(
     """
     Run reconciliation engine to match bank statement lines with transactions.
     """
-    if "fund_id" not in payload:
-        raise HTTPException(status_code=400, detail="fund_id is required")
-    fund_id = uuid.UUID(str(payload["fund_id"]))
     _require_fund_access(fund_id, actor)
     
     try:
@@ -298,7 +282,7 @@ def reconcile(
 
 @router.get("/reconciliation/report")
 def reconciliation_report(
-    fund_id: uuid.UUID = Query(...),
+    fund_id: uuid.UUID,
     db: Session = Depends(get_db),
     actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN"])),
 ):
