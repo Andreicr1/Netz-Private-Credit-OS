@@ -1,4 +1,4 @@
-name: Deploy Backend API - netz-prod-api
+name: Build and deploy Python app to Azure Web App - netz-prod-api
 
 on:
   push:
@@ -9,31 +9,35 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
-          cd api
+          cd backend
+          python -m venv antenv
+          source antenv/bin/activate
           pip install -r requirements.txt
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: api-build
-          path: api
+          name: python-app
+          path: |
+            backend
+            !backend/antenv/
 
   deploy:
     runs-on: ubuntu-latest
     needs: build
-
     permissions:
       id-token: write
       contents: read
@@ -42,19 +46,17 @@ jobs:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: api-build
-          path: api
+          name: python-app
 
-      - name: Login to Azure
+      - name: Azure Login
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_426D9D8CF5E44278B95832DF7A8B952C }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_86103DA9D503455CBA1DD528317C4086 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_2DB64B82AB4142F0BF1A20F53F83988A }}
 
-      - name: Deploy API to App Service
+      - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
-          app-name: netz-prod-api
-          slot-name: Production
-          package: api
+          app-name: 'netz-prod-api'
+          package: backend
