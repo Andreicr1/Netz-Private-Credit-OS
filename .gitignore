@@ -77,3 +77,5 @@ federated.json
 Thumbs.db
 .vscode/
 .idea/
+
+.env

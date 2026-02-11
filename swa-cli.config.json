@@ -1,0 +1,11 @@
+{
+  "$schema": "https://aka.ms/azure/static-web-apps-cli/schema",
+  "configurations": {
+    "netz-private-credit-os": {
+      "appLocation": "frontend\\dist",
+      "outputLocation": ".",
+      "appName": "Netz-PCF-Frontend",
+      "resourceGroup": "Netz-International"
+    }
+  }
+}

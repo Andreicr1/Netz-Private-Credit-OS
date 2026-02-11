@@ -141,6 +141,13 @@ jobs:
             --name "${AZURE_WEBAPP_NAME}" \
             --startup-file "${STARTUP_CMD}"
 
+          # EasyAuth: allow anonymous requests so health probes and direct
+          # API calls reach FastAPI (which has its own JWT auth middleware).
+          # Without this, EasyAuth returns 401 for ALL unauthenticated calls.
+          az rest --method PUT \
+            --url "https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.Web/sites/${AZURE_WEBAPP_NAME}/config/authsettingsV2?api-version=2023-12-01" \
+            --body '{"properties":{"platform":{"enabled":true,"runtimeVersion":"~1"},"globalValidation":{"requireAuthentication":false,"unauthenticatedClientAction":"AllowAnonymous"},"identityProviders":{"azureStaticWebApps":{"enabled":true,"registration":{"clientId":"lively-grass-036929e0f.2.azurestaticapps.net"}}}}}'
+
           # Avoid SCM restarts racing with zip deploy
           sleep 20
 
