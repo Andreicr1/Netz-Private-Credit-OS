@@ -58,21 +58,23 @@ jobs:
             -r backend/requirements.txt \
             --target .python_packages/lib/site-packages
 
-      - name: Create deploy.zip (root contains backend/ + .deployment)
+      - name: Create deploy.zip (backend/ + .python_packages/)
         shell: bash
         run: |
           set -euo pipefail
           rm -f deploy.zip
-          cat > .deployment <<'EOF'
-          [config]
-          project = backend
-          EOF
 
-          zip -r deploy.zip backend .python_packages .deployment \
+          # Do NOT include a .deployment file. The `project = backend` directive
+          # causes Kudu to extract only the backend/ contents to wwwroot (flattening
+          # the directory structure), which makes `cd /home/site/wwwroot/backend` fail
+          # and also discards .python_packages/ since it's outside the project scope.
+
+          zip -r deploy.zip backend .python_packages \
             -x "backend/__pycache__/*" \
                "backend/.pytest_cache/*" \
                "backend/**/__pycache__/*" \
-               "backend/**/.pytest_cache/*"
+               "backend/**/.pytest_cache/*" \
+               "backend/tests/*"
 
       - name: Validate deploy.zip structure
         shell: bash
@@ -88,17 +90,20 @@ jobs:
                   continue
               if name.startswith('.python_packages/') or name == '.python_packages/':
                   continue
-              if name == '.deployment':
-                  continue
               bad.append(name)
 
           if bad:
-              print('ERROR: deploy.zip contains unexpected entries (allowed: backend/, .python_packages/, and .deployment):')
+              print('ERROR: deploy.zip contains unexpected entries (allowed: backend/ and .python_packages/):')
               for n in bad[:50]:
                   print(' -', n)
               sys.exit(1)
 
-          print('OK: deploy.zip contains only backend/, .python_packages/, and .deployment')
+          # Verify backend/app/main.py exists (sanity check for startup command)
+          if 'backend/app/main.py' not in z.namelist():
+              print('ERROR: deploy.zip missing backend/app/main.py')
+              sys.exit(1)
+
+          print('OK: deploy.zip contains backend/ and .python_packages/')
           PY
 
       - name: Azure Login (OIDC)
@@ -126,9 +131,11 @@ jobs:
               WEBSITE_RUN_FROM_PACKAGE=0 \
               PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages
 
-          # Use single-quotes for assignment so $PORT is not expanded on the runner.
-          # App Service will expand $PORT at runtime inside the inner double-quotes.
-          STARTUP_CMD='bash -c "cd /home/site/wwwroot/backend && PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:\"$PORT\" --timeout 120"'
+          # Startup command: cd into the backend directory and run gunicorn.
+          # No need for bash -c wrapper — Oryx runs the command through bash.
+          # PYTHONPATH is already set as an app setting above.
+          # $PORT is expanded at runtime by the container (typically 8000).
+          STARTUP_CMD='cd /home/site/wwwroot/backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
           az webapp config set \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --name "${AZURE_WEBAPP_NAME}" \
