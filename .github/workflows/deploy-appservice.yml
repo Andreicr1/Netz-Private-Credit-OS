@@ -167,6 +167,15 @@ jobs:
               || echo "  not found or already gone — OK."
           done
 
+      - name: Ensure site is started (Kudu needs a running site)
+        shell: bash
+        run: |
+          set -euo pipefail
+          az webapp start \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" || true
+          sleep 10
+
       - name: Deploy (az webapp deploy)
         shell: bash
         run: |
