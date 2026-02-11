@@ -1,0 +1,20 @@
+specVersion: "2.6"
+metadata:
+  name: netz.fund.os
+type: application
+
+framework:
+  name: OpenUI5
+  version: "1.96.0"
+  libraries:
+    - name: sap.ui.core
+    - name: sap.m
+    - name: sap.f
+    - name: sap.ui.layout
+    - name: sap.ui.unified
+    - name: sap.uxap
+
+resources:
+  configuration:
+    paths:
+      webapp: webapp

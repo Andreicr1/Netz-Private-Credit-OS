@@ -3,11 +3,108 @@
   xmlns:mvc="sap.ui.core.mvc"
   xmlns="sap.m"
 >
-  <Page title="Compliance & Obligations" showHeader="true">
+  <Page title="Compliance" showHeader="true">
     <content>
-      <VBox class="sapUiSmallMargin">
-        <Title text="Compliance" level="H2" />
-        <Text text="Read-only placeholders for obligations, evidence, and audit workflows." />
+      <VBox class="sapUiSmallMargin" width="100%">
+        <MessageStrip
+          text="{= ${compliance>/status} === 'error' ? (${compliance>/errorMessage} || 'Failed to load compliance data.') : '' }"
+          type="Error"
+          showIcon="true"
+          visible="{= ${compliance>/status} === 'error' }"
+        />
+
+        <IconTabBar selectedKey="{compliance>/selectedTab}" select="onTabSelect">
+          <items>
+            <IconTabFilter key="obligations" text="Obligations">
+              <VBox width="100%" class="sapUiTinyMarginTop">
+                <Toolbar>
+                  <Title text="Obligations" level="H3" />
+                  <ToolbarSpacer />
+                  <Button text="Create Obligation" type="Emphasized" enabled="{compliance>/canWrite}" press="onCreateObligation" />
+                  <Button text="Refresh" type="Transparent" press="onRefreshObligations" />
+                </Toolbar>
+
+                <Table id="obligationsTable" items="{compliance>/obligations}" inset="false" width="100%">
+                  <columns>
+                    <Column><Text text="Name" /></Column>
+                    <Column><Text text="Regulator" /></Column>
+                    <Column><Text text="Workflow" /></Column>
+                    <Column><Text text="Active" /></Column>
+                    <Column><Text text="Updated At" /></Column>
+                  </columns>
+                  <items>
+                    <ColumnListItem type="Navigation" press="onOpenObligation">
+                      <cells>
+                        <Text text="{compliance>name}" />
+                        <Text text="{compliance>regulator}" />
+                        <ObjectStatus text="{compliance>workflow_status}" state="{= ${compliance>workflow_status} === 'CLOSED' ? 'Success' : (${compliance>workflow_status} === 'IN_PROGRESS' ? 'Warning' : 'None') }" />
+                        <ObjectStatus text="{= ${compliance>is_active} ? 'Yes' : 'No' }" state="{= ${compliance>is_active} ? 'Information' : 'None' }" />
+                        <Text text="{compliance>updated_at}" />
+                      </cells>
+                    </ColumnListItem>
+                  </items>
+                </Table>
+              </VBox>
+            </IconTabFilter>
+
+            <IconTabFilter key="gaps" text="AI Gaps">
+              <VBox width="100%" class="sapUiTinyMarginTop">
+                <Toolbar>
+                  <Title text="AI Gaps" level="H3" />
+                  <ToolbarSpacer />
+                  <Button text="Recompute" type="Emphasized" enabled="{compliance>/canWrite}" press="onRecomputeGaps" />
+                  <Button text="Refresh" type="Transparent" press="onRefreshGaps" />
+                </Toolbar>
+
+                <Table id="gapsTable" items="{compliance>/gaps}" inset="false" width="100%">
+                  <columns>
+                    <Column><Text text="Name" /></Column>
+                    <Column><Text text="Regulator" /></Column>
+                    <Column><Text text="Updated At" /></Column>
+                  </columns>
+                  <items>
+                    <ColumnListItem type="Navigation" press="onOpenGapAsObligation">
+                      <cells>
+                        <Text text="{compliance>name}" />
+                        <Text text="{compliance>regulator}" />
+                        <Text text="{compliance>updated_at}" />
+                      </cells>
+                    </ColumnListItem>
+                  </items>
+                </Table>
+              </VBox>
+            </IconTabFilter>
+
+            <IconTabFilter key="closed" text="Closed">
+              <VBox width="100%" class="sapUiTinyMarginTop">
+                <Toolbar>
+                  <Title text="Closed Obligations" level="H3" />
+                  <ToolbarSpacer />
+                  <Button text="Refresh" type="Transparent" press="onRefreshClosed" />
+                </Toolbar>
+
+                <Table id="closedTable" items="{compliance>/closed}" inset="false" width="100%">
+                  <columns>
+                    <Column><Text text="Name" /></Column>
+                    <Column><Text text="Regulator" /></Column>
+                    <Column><Text text="Workflow" /></Column>
+                    <Column><Text text="Updated At" /></Column>
+                  </columns>
+                  <items>
+                    <ColumnListItem type="Navigation" press="onOpenObligation">
+                      <cells>
+                        <Text text="{compliance>name}" />
+                        <Text text="{compliance>regulator}" />
+                        <ObjectStatus text="{compliance>workflow_status}" state="Success" />
+                        <Text text="{compliance>updated_at}" />
+                      </cells>
+                    </ColumnListItem>
+                  </items>
+                </Table>
+              </VBox>
+            </IconTabFilter>
+          </items>
+        </IconTabBar>
       </VBox>
     </content>
   </Page>

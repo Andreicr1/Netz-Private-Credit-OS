@@ -32,7 +32,8 @@
         "sap.f": {},
         "sap.ui.core": {},
         "sap.ui.layout": {},
-        "sap.ui.unified": {}
+        "sap.ui.unified": {},
+        "sap.uxap": {}
       }
     },
     "contentDensities": {
@@ -90,6 +91,31 @@
           "pattern": "compliance",
           "name": "compliance",
           "target": "compliance"
+        },
+        {
+          "pattern": "compliance/obligations/{obligationId}",
+          "name": "obligationDetail",
+          "target": "obligationDetail"
+        },
+        {
+          "pattern": "copilot",
+          "name": "copilot",
+          "target": "copilot"
+        },
+        {
+          "pattern": "reporting",
+          "name": "reporting",
+          "target": "reporting"
+        },
+        {
+          "pattern": "funds/{fundId}/signatures",
+          "name": "signatures",
+          "target": "signatures"
+        },
+        {
+          "pattern": "funds/{fundId}/signatures/{requestId}",
+          "name": "signatureDetail",
+          "target": "signatureDetail"
         }
       ],
       "targets": {
@@ -108,6 +134,29 @@
         "compliance": {
           "viewName": "Compliance",
           "viewId": "compliance"
+        },
+        "obligationDetail": {
+          "viewName": "ObligationDetail",
+          "viewId": "obligationDetail"
+        },
+        "copilot": {
+          "viewName": "FundCopilot",
+          "viewId": "copilot"
+        },
+        "reporting": {
+          "viewName": "Reporting",
+          "viewId": "reporting",
+          "viewPath": "netz.fund.os.modules.reporting"
+        },
+        "signatures": {
+          "viewName": "SignatureList",
+          "viewId": "signatures",
+          "viewPath": "netz.fund.os.modules.signatures"
+        },
+        "signatureDetail": {
+          "viewName": "SignatureDetail",
+          "viewId": "signatureDetail",
+          "viewPath": "netz.fund.os.modules.signatures"
         }
       }
     }

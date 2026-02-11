@@ -1,0 +1,266 @@
+<mvc:View
+  controllerName="netz.fund.os.modules.signatures.SignatureDetail"
+  xmlns:mvc="sap.ui.core.mvc"
+  xmlns="sap.m"
+  xmlns:core="sap.ui.core"
+  xmlns:uxap="sap.uxap"
+  xmlns:form="sap.ui.layout.form"
+>
+  <Page title="Signature Request" showHeader="true" showNavButton="true" navButtonPress="onNavBack">
+    <content>
+      <VBox class="sapUiSmallMargin" width="100%">
+        <MessageStrip
+          text="{signatureDetail>/errorMessage}"
+          type="Error"
+          showIcon="true"
+          visible="{= !!${signatureDetail>/errorMessage} }"
+        />
+
+        <MessageStrip
+          text="{signatureDetail>/devNotice}"
+          type="Warning"
+          showIcon="true"
+          visible="{= !!${signatureDetail>/devNotice} }"
+        />
+
+        <uxap:ObjectPageLayout showHeaderContent="true" alwaysShowContentHeader="true">
+          <uxap:headerTitle>
+            <uxap:ObjectPageDynamicHeaderTitle>
+              <uxap:heading>
+                <HBox alignItems="Center" justifyContent="SpaceBetween" width="100%">
+                  <VBox>
+                    <Title text="{= 'Request ' + (${signatureDetail>/request/id} || '') }" level="H2" />
+                    <Text text="{= 'Status: ' + (${signatureDetail>/request/status} || '') + ' | Type: ' + (${signatureDetail>/request/type} || '') }" />
+                  </VBox>
+                  <ObjectStatus
+                    text="{signatureDetail>/request/status}"
+                    state="{= ${signatureDetail>/request/status} === 'REJECTED' ? 'Error' : (${signatureDetail>/request/status} === 'SIGNED' ? 'Success' : 'None') }"
+                  />
+                </HBox>
+              </uxap:heading>
+            </uxap:ObjectPageDynamicHeaderTitle>
+          </uxap:headerTitle>
+
+          <uxap:sections>
+            <uxap:ObjectPageSection title="Header">
+              <uxap:subSections>
+                <uxap:ObjectPageSubSection>
+                  <VBox class="sapUiSmallMargin" width="100%">
+                    <form:SimpleForm editable="false" layout="ResponsiveGridLayout">
+                      <Label text="Amount (USD)" />
+                      <Text text="{signatureDetail>/request/amount_usd}" />
+
+                      <Label text="Beneficiary" />
+                      <Text text="{signatureDetail>/request/beneficiary_name}" />
+
+                      <Label text="Beneficiary Bank" />
+                      <Text text="{signatureDetail>/request/beneficiary_bank}" />
+
+                      <Label text="Beneficiary Account" />
+                      <Text text="{signatureDetail>/request/beneficiary_account}" />
+
+                      <Label text="Purpose" />
+                      <Text text="{signatureDetail>/request/purpose}" wrapping="true" />
+
+                      <Label text="Linked Obligation / Deal / Memo" />
+                      <Text text="{signatureDetail>/request/linked_entity_ref}" wrapping="true" />
+
+                      <Label text="Created At" />
+                      <Text text="{signatureDetail>/request/created_at_utc}" />
+
+                      <Label text="Deadline" />
+                      <Text text="{signatureDetail>/request/deadline_utc}" />
+                    </form:SimpleForm>
+                  </VBox>
+                </uxap:ObjectPageSubSection>
+              </uxap:subSections>
+            </uxap:ObjectPageSection>
+
+            <uxap:ObjectPageSection title="Evidence Block (mandatory)">
+              <uxap:subSections>
+                <uxap:ObjectPageSubSection>
+                  <VBox class="sapUiSmallMargin" width="100%">
+                    <MessageStrip
+                      text="Missing supporting evidence. Signing/submission is blocked."
+                      type="Error"
+                      showIcon="true"
+                      visible="{= ${signatureDetail>/evidenceCount} === 0 }"
+                    />
+
+                    <Toolbar class="sapUiTinyMarginTop">
+                      <Text text="Supporting Data Room documents" />
+                      <ToolbarSpacer />
+                      <Button text="Refresh" press="onRefresh" enabled="{= ${signatureDetail>/busy} !== true }" />
+                    </Toolbar>
+
+                    <UploadCollection
+                      items="{signatureDetail>/evidence}"
+                      uploadEnabled="false"
+                      uploadButtonInvisible="true"
+                      terminationEnabled="false"
+                      mode="None"
+                      showSeparators="All">
+                      <items>
+                        <UploadCollectionItem
+                          documentId="{signatureDetail>document_id}"
+                          fileName="{signatureDetail>title}"
+                          url="{signatureDetail>source_blob}"
+                          visibleEdit="false"
+                          visibleDelete="false"
+                        />
+                      </items>
+                    </UploadCollection>
+
+                    <Panel headerText="Investment Memo / Committee" expandable="false" class="sapUiTinyMarginTop">
+                      <content>
+                        <form:SimpleForm editable="false" layout="ResponsiveGridLayout" class="sapUiSmallMargin">
+                          <Label text="Investment Memo approval status" />
+                          <Text text="{signatureDetail>/request/investment_memo_status}" />
+                          <Label text="Committee votes" />
+                          <Text text="{signatureDetail>/request/committee_votes_summary}" wrapping="true" />
+                        </form:SimpleForm>
+                      </content>
+                    </Panel>
+                  </VBox>
+                </uxap:ObjectPageSubSection>
+              </uxap:subSections>
+            </uxap:ObjectPageSection>
+
+            <uxap:ObjectPageSection title="Director Approvals">
+              <uxap:subSections>
+                <uxap:ObjectPageSubSection>
+                  <VBox class="sapUiSmallMargin" width="100%">
+                    <MessageStrip
+                      text="This action will be recorded in the audit log."
+                      type="Information"
+                      showIcon="true"
+                      visible="true"
+                    />
+
+                    <Table items="{signatureDetail>/signatures}" inset="false" growing="true">
+                      <columns>
+                        <Column width="14rem"><Text text="Director Name" /></Column>
+                        <Column width="10rem"><Text text="Signature Status" /></Column>
+                        <Column width="16rem"><Text text="Timestamp" /></Column>
+                        <Column width="30%"><Text text="Comment" /></Column>
+                      </columns>
+                      <items>
+                        <ColumnListItem>
+                          <cells>
+                            <Text text="{signatureDetail>director_name}" />
+                            <Text text="{signatureDetail>status}" />
+                            <Text text="{signatureDetail>signed_at_utc}" />
+                            <Text text="{signatureDetail>comment}" wrapping="true" />
+                          </cells>
+                        </ColumnListItem>
+                      </items>
+                    </Table>
+
+                    <Toolbar class="sapUiTinyMarginTop">
+                      <ToolbarSpacer />
+                      <Button
+                        text="Sign Request"
+                        type="Emphasized"
+                        press="onOpenSignDialog"
+                        visible="{signatureDetail>/canSign}"
+                        enabled="{= ${signatureDetail>/canSign} &amp;&amp; ${signatureDetail>/canSignNow} }"
+                      />
+                      <Button
+                        text="Reject Request"
+                        type="Reject"
+                        press="onOpenRejectDialog"
+                        visible="{signatureDetail>/canReject}"
+                        enabled="{= ${signatureDetail>/canReject} &amp;&amp; ${signatureDetail>/canRejectNow} }"
+                      />
+                    </Toolbar>
+
+                    <MessageStrip
+                      text="Dual-signature required: 2 distinct directors."
+                      type="Information"
+                      showIcon="true"
+                      visible="true"
+                    />
+                  </VBox>
+                </uxap:ObjectPageSubSection>
+              </uxap:subSections>
+            </uxap:ObjectPageSection>
+
+            <uxap:ObjectPageSection title="Execution Pack Export (Bank Submission)">
+              <uxap:subSections>
+                <uxap:ObjectPageSubSection>
+                  <VBox class="sapUiSmallMargin" width="100%">
+                    <MessageStrip
+                      text="This export will be recorded in the audit log (EXECUTION_PACK_GENERATED)."
+                      type="Information"
+                      showIcon="true"
+                      visible="true"
+                    />
+
+                    <Toolbar class="sapUiTinyMarginTop">
+                      <Text text="Available when status is SIGNED (2/2)." />
+                      <ToolbarSpacer />
+                      <Button
+                        text="Generate Bank Execution Pack"
+                        type="Emphasized"
+                        press="onExportExecutionPack"
+                        enabled="{= ${signatureDetail>/canExportPack} }"
+                      />
+                    </Toolbar>
+                  </VBox>
+                </uxap:ObjectPageSubSection>
+              </uxap:subSections>
+            </uxap:ObjectPageSection>
+          </uxap:sections>
+        </uxap:ObjectPageLayout>
+      </VBox>
+
+      <Dialog
+        id="signDialog"
+        title="Confirm Signature"
+        type="Message"
+        contentWidth="32rem"
+        afterClose="onCloseSignDialog">
+        <content>
+          <VBox class="sapUiSmallMargin" width="100%">
+            <MessageStrip text="This action will be recorded in the audit log." type="Warning" showIcon="true" visible="true" />
+            <Text text="You are about to sign this request as a Director." wrapping="true" />
+            <TextArea value="{signatureDetail>/signComment}" rows="3" width="100%" placeholder="Optional comment" />
+          </VBox>
+        </content>
+        <beginButton>
+          <Button text="Sign" type="Emphasized" press="onConfirmSign" />
+        </beginButton>
+        <endButton>
+          <Button text="Cancel" press="onCloseSignDialog" />
+        </endButton>
+      </Dialog>
+
+      <Dialog
+        id="rejectDialog"
+        title="Reject Request"
+        type="Message"
+        contentWidth="32rem"
+        afterClose="onCloseRejectDialog">
+        <content>
+          <VBox class="sapUiSmallMargin" width="100%">
+            <MessageStrip text="This action will be recorded in the audit log." type="Warning" showIcon="true" visible="true" />
+            <Text text="Rejection requires a justification." wrapping="true" />
+            <TextArea value="{signatureDetail>/rejectReason}" rows="4" width="100%" placeholder="Required justification" />
+            <MessageStrip
+              text="Justification is required."
+              type="Error"
+              showIcon="true"
+              visible="{= ${signatureDetail>/rejectReasonError} === true }"
+            />
+          </VBox>
+        </content>
+        <beginButton>
+          <Button text="Reject" type="Reject" press="onConfirmReject" />
+        </beginButton>
+        <endButton>
+          <Button text="Cancel" press="onCloseRejectDialog" />
+        </endButton>
+      </Dialog>
+    </content>
+  </Page>
+</mvc:View>

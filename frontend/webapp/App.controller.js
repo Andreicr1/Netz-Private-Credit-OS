@@ -4,6 +4,11 @@ sap.ui.define([
 ], function (Controller, UIComponent) {
   "use strict";
 
+  function getFundIdFromQuery() {
+    var q = new URLSearchParams(window.location.search || "");
+    return q.get("fundId") || q.get("fund_id") || "";
+  }
+
   return Controller.extend("netz.fund.os.App", {
     onInit: function () {
       var router = UIComponent.getRouterFor(this);
@@ -53,6 +58,12 @@ sap.ui.define([
 
       var route = this._getRouteFromItem(item);
       if (!route) {
+        return;
+      }
+
+      if (route === "signatures") {
+        var fundId = getFundIdFromQuery();
+        UIComponent.getRouterFor(this).navTo(route, { fundId: fundId || "" });
         return;
       }
 

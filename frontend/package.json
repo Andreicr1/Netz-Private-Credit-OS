@@ -1,0 +1,12 @@
+{
+  "name": "netz-private-credit-os-ui5",
+  "version": "0.0.1",
+  "private": true,
+  "devDependencies": {
+    "@ui5/cli": "^3.11.5"
+  },
+  "scripts": {
+    "start": "ui5 serve -o index.html",
+    "build": "ui5 build --all"
+  }
+}

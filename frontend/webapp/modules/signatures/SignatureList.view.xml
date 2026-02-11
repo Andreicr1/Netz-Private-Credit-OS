@@ -1,0 +1,109 @@
+<mvc:View
+  controllerName="netz.fund.os.modules.signatures.SignatureList"
+  xmlns:mvc="sap.ui.core.mvc"
+  xmlns="sap.m"
+>
+  <Page title="Director Signature Workflow" showHeader="true">
+    <content>
+      <VBox class="sapUiSmallMargin" width="100%">
+        <MessageStrip
+          text="{signatures>/devNotice}"
+          type="Warning"
+          showIcon="true"
+          visible="{= !!${signatures>/devNotice} }"
+        />
+
+        <MessageStrip
+          text="{signatures>/errorMessage}"
+          type="Error"
+          showIcon="true"
+          visible="{= !!${signatures>/errorMessage} }"
+        />
+
+        <Panel headerText="Signature Requests Queue" expandable="false">
+          <content>
+            <Toolbar class="sapUiSmallMargin">
+              <Label text="Status" />
+              <Select selectedKey="{signatures>/filters/status}" change="onFilterChange" width="10rem">
+                <items>
+                  <core:Item key="" text="All" xmlns:core="sap.ui.core" />
+                  <core:Item key="DRAFT" text="Draft" xmlns:core="sap.ui.core" />
+                  <core:Item key="PENDING" text="Pending" xmlns:core="sap.ui.core" />
+                  <core:Item key="SIGNED" text="Signed" xmlns:core="sap.ui.core" />
+                  <core:Item key="EXECUTED" text="Executed" xmlns:core="sap.ui.core" />
+                  <core:Item key="REJECTED" text="Rejected" xmlns:core="sap.ui.core" />
+                </items>
+              </Select>
+
+              <ToolbarSeparator />
+
+              <Label text="Type" />
+              <Select selectedKey="{signatures>/filters/type}" change="onFilterChange" width="10rem">
+                <items>
+                  <core:Item key="" text="All" xmlns:core="sap.ui.core" />
+                  <core:Item key="EXPENSE" text="Expense" xmlns:core="sap.ui.core" />
+                  <core:Item key="INVESTMENT" text="Investment" xmlns:core="sap.ui.core" />
+                  <core:Item key="OTHER" text="Other" xmlns:core="sap.ui.core" />
+                </items>
+              </Select>
+
+              <ToolbarSeparator />
+
+              <Label text="Created" />
+              <Select selectedKey="{signatures>/filters/createdDays}" change="onFilterChange" width="10rem">
+                <items>
+                  <core:Item key="" text="All" xmlns:core="sap.ui.core" />
+                  <core:Item key="30" text="Last 30 days" xmlns:core="sap.ui.core" />
+                  <core:Item key="90" text="Last 90 days" xmlns:core="sap.ui.core" />
+                </items>
+              </Select>
+
+              <ToolbarSeparator />
+
+              <Label text="> Amount" />
+              <Input value="{signatures>/filters/amountThreshold}" liveChange="onFilterChange" width="10rem" placeholder="USD" />
+
+              <ToolbarSpacer />
+              <Button text="Refresh" press="onRefresh" enabled="{= ${signatures>/busy} !== true }" />
+            </Toolbar>
+
+            <Table items="{signatures>/filteredItems}" inset="false" growing="true" growingScrollToLoad="true">
+              <columns>
+                <Column width="11rem"><Text text="Request ID" /></Column>
+                <Column width="8rem"><Text text="Type" /></Column>
+                <Column width="8rem"><Text text="Amount (USD)" /></Column>
+                <Column width="12rem"><Text text="Beneficiary" /></Column>
+                <Column width="8rem"><Text text="Status" /></Column>
+                <Column width="6rem"><Text text="Required" /></Column>
+                <Column width="7rem"><Text text="Signed" /></Column>
+                <Column width="10rem"><Text text="Created At" /></Column>
+                <Column width="10rem"><Text text="Deadline" /></Column>
+                <Column width="14rem"><Text text="Actions" /></Column>
+              </columns>
+              <items>
+                <ColumnListItem>
+                  <cells>
+                    <Text text="{signatures>id}" />
+                    <Text text="{signatures>type}" />
+                    <Text text="{signatures>amount_usd}" />
+                    <Text text="{signatures>beneficiary_name}" />
+                    <Text text="{signatures>status}" />
+                    <Text text="2" />
+                    <Text text="{signatures>current_signatures_count}" />
+                    <Text text="{signatures>created_at_utc}" />
+                    <Text text="{signatures>deadline_utc}" />
+                    <HBox>
+                      <Button text="View" type="Transparent" press="onView" />
+                      <Button text="Sign" type="Transparent" press="onSignFromList" visible="{signatures>/canSign}" />
+                      <Button text="Export" type="Transparent" press="onExportFromList" enabled="{= ${signatures>status} === 'SIGNED' }" />
+                    </HBox>
+                  </cells>
+                </ColumnListItem>
+              </items>
+            </Table>
+          </content>
+        </Panel>
+      </VBox>
+    </content>
+  </Page>
+</mvc:View>

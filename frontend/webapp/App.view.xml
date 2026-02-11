@@ -33,6 +33,21 @@
                 <core:CustomData key="route" value="compliance" writeToDom="false" />
               </customData>
             </StandardListItem>
+            <StandardListItem title="Fund Copilot" type="Navigation">
+              <customData>
+                <core:CustomData key="route" value="copilot" writeToDom="false" />
+              </customData>
+            </StandardListItem>
+            <StandardListItem title="Reporting" type="Navigation">
+              <customData>
+                <core:CustomData key="route" value="reporting" writeToDom="false" />
+              </customData>
+            </StandardListItem>
+            <StandardListItem title="Director Signature Workflow" type="Navigation">
+              <customData>
+                <core:CustomData key="route" value="signatures" writeToDom="false" />
+              </customData>
+            </StandardListItem>
           </List>
         </Page>
       </masterPages>
