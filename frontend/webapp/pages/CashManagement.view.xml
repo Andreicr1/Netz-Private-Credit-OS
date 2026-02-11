@@ -2,6 +2,8 @@
   controllerName="netz.fund.os.pages.CashManagement"
   xmlns:mvc="sap.ui.core.mvc"
   xmlns="sap.m"
+  xmlns:form="sap.ui.layout.form"
+  xmlns:unified="sap.ui.unified"
 >
   <Page title="Cash Management Ledger" showHeader="true">
     <content>
@@ -26,8 +28,234 @@
           text="Approval workflow will be implemented in EPIC 5. This is UI structure only."
           type="Information"
           showIcon="true"
+          xmlns:core="sap.ui.core"
         />
-      </VBox>
+          <Page title="Cash Management" showHeader="true">
     </content>
   </Page>
-</mvc:View>
+                <MessageStrip
+                  text="Governance: this system records and approves cash instructions; it does not execute payments. Reconciliation actions are explicit and auditable."
+                  type="Warning"
+                  showIcon="true"
+                />
+
+                <MessageStrip
+                  text="{cash>/errorMessage}"
+                  type="Error"
+                  showIcon="true"
+                  visible="{= ${cash>/status} === 'error' }"
+                />
+
+                <IconTabBar expanded="true" class="sapUiSmallMarginTop">
+                  <items>
+                    <IconTabFilter text="Transactions" key="tx">
+                      <VBox width="100%">
+                        <Toolbar>
+                          <Title text="Transactions" level="H3" />
+                          <ToolbarSpacer />
+                          <Button text="Refresh" press="onRefreshTransactions" />
+                        </Toolbar>
+
+                        <Table
+                          id="txTable"
+                          inset="false"
+                          width="100%"
+                          items="{cash>/transactions}"
+                          mode="SingleSelectLeft"
+                          selectionChange="onTxSelect"
+                        >
+                          <columns>
+                            <Column><Text text="Value Date" /></Column>
+                            <Column><Text text="Type" /></Column>
+                            <Column><Text text="Amount" /></Column>
+                            <Column><Text text="Currency" /></Column>
+                            <Column><Text text="Status" /></Column>
+                            <Column><Text text="Reference" /></Column>
+                          </columns>
+                          <items>
+                            <ColumnListItem>
+                              <cells>
+                                <Text text="{cash>value_date}" />
+                                <Text text="{cash>type}" />
+                                <Text text="{cash>amount}" />
+                                <Text text="{cash>currency}" />
+                                <ObjectStatus
+                                  text="{cash>status}"
+                                  state="{= ${cash>status} === 'APPROVED' ? 'Success' : (${cash>status} === 'EXECUTED' ? 'Success' : (${cash>status} === 'PENDING_APPROVAL' ? 'Warning' : (${cash>status} === 'REJECTED' ? 'Error' : (${cash>status} === 'CANCELLED' ? 'Error' : 'None')))) }"
+                                />
+                                <Text text="{cash>reference_code}" />
+                              </cells>
+                            </ColumnListItem>
+                          </items>
+                        </Table>
+
+                        <MessageStrip
+                          text="Select a transaction to use for manual reconciliation matching."
+                          type="Information"
+                          showIcon="true"
+                          class="sapUiSmallMarginTop"
+                        />
+                      </VBox>
+                    </IconTabFilter>
+
+                    <IconTabFilter text="Reconciliation" key="recon">
+                      <VBox width="100%">
+                        <Toolbar>
+                          <Title text="Bank Statement Reconciliation" level="H3" />
+                          <ToolbarSpacer />
+                          <Button text="Refresh" press="onRefreshReconciliation" />
+                        </Toolbar>
+
+                        <Panel headerText="Upload Statement" expandable="false" class="sapUiSmallMarginTop">
+                          <VBox width="100%" class="sapUiSmallMargin">
+                            <form:SimpleForm editable="true" layout="ResponsiveGridLayout">
+                              <Label text="Period Start" />
+                              <DatePicker value="{cash>/upload/period_start}" valueFormat="yyyy-MM-dd" displayFormat="yyyy-MM-dd" width="12rem" />
+
+                              <Label text="Period End" />
+                              <DatePicker value="{cash>/upload/period_end}" valueFormat="yyyy-MM-dd" displayFormat="yyyy-MM-dd" width="12rem" />
+
+                              <Label text="File" />
+                              <HBox width="100%" alignItems="Center" renderType="Bare">
+                                <unified:FileUploader
+                                  width="100%"
+                                  placeholder="Choose PDF/CSV/XLS/XLSX"
+                                  fileType="pdf,csv,xls,xlsx"
+                                  change="onStatementFileChange"
+                                />
+                                <Button text="Upload" type="Emphasized" class="sapUiTinyMarginBegin" press="onUploadStatement" />
+                              </HBox>
+
+                              <Label text="Notes" />
+                              <TextArea value="{cash>/upload/notes}" width="100%" growing="true" growingMaxLines="4" />
+
+                              <Label text="Selected" />
+                              <Text text="{= ${cash>/upload/fileName} ? ${cash>/upload/fileName} : 'No file selected' }" />
+                            </form:SimpleForm>
+                          </VBox>
+                        </Panel>
+
+                        <Panel headerText="Statements" expandable="false" class="sapUiSmallMarginTop">
+                          <VBox width="100%" class="sapUiSmallMargin">
+                            <Table
+                              id="statementsTable"
+                              inset="false"
+                              width="100%"
+                              items="{cash>/statements}"
+                              mode="SingleSelectLeft"
+                              selectionChange="onStatementRowSelect"
+                            >
+                              <columns>
+                                <Column><Text text="Period Start" /></Column>
+                                <Column><Text text="Period End" /></Column>
+                                <Column><Text text="Uploaded At" /></Column>
+                                <Column><Text text="File" /></Column>
+                              </columns>
+                              <items>
+                                <ColumnListItem>
+                                  <cells>
+                                    <Text text="{cash>period_start}" />
+                                    <Text text="{cash>period_end}" />
+                                    <Text text="{cash>uploaded_at}" />
+                                    <Text text="{cash>original_filename}" />
+                                  </cells>
+                                </ColumnListItem>
+                              </items>
+                            </Table>
+                          </VBox>
+                        </Panel>
+
+                        <HBox width="100%" class="sapUiSmallMarginTop" alignItems="Center">
+                          <Label text="Statement" width="7rem" />
+                          <Select
+                            id="statementSelect"
+                            width="100%"
+                            items="{cash>/statements}"
+                            selectedKey="{cash>/selectedStatementId}"
+                            change="onStatementChange"
+                          >
+                            <core:Item
+                              key="{cash>id}"
+                              text="{= (${cash>period_start} || '') + ' → ' + (${cash>period_end} || '') + ((${cash>original_filename} ? (' — ' + ${cash>original_filename}) : '')) }"
+                            />
+                          </Select>
+                        </HBox>
+
+                        <HBox width="100%" class="sapUiSmallMarginTop" renderType="Bare">
+                          <VBox width="60%" class="sapUiSmallMarginEnd">
+                            <Title text="Statement Lines" level="H4" />
+                            <Table
+                              id="linesTable"
+                              inset="false"
+                              width="100%"
+                              items="{cash>/lines}"
+                              mode="SingleSelectLeft"
+                              selectionChange="onLineSelect"
+                            >
+                              <columns>
+                                <Column><Text text="Value Date" /></Column>
+                                <Column><Text text="Description" /></Column>
+                                <Column><Text text="Amount (USD)" /></Column>
+                                <Column><Text text="Direction" /></Column>
+                                <Column><Text text="Status" /></Column>
+                                <Column><Text text="Matched Tx" /></Column>
+                              </columns>
+                              <items>
+                                <ColumnListItem>
+                                  <cells>
+                                    <Text text="{cash>value_date}" />
+                                    <Text text="{cash>description}" />
+                                    <Text text="{cash>amount_usd}" />
+                                    <Text text="{cash>direction}" />
+                                    <ObjectStatus
+                                      text="{cash>reconciliation_status}"
+                                      state="{= ${cash>reconciliation_status} === 'MATCHED' ? 'Success' : (${cash>reconciliation_status} === 'DISCREPANCY' ? 'Error' : 'None') }"
+                                    />
+                                    <Text text="{cash>matched_transaction_id}" />
+                                  </cells>
+                                </ColumnListItem>
+                              </items>
+                            </Table>
+                          </VBox>
+
+                          <VBox width="40%">
+                            <Title text="Action" level="H4" />
+
+                            <MessageStrip
+                              text="Actions are enabled only for UNMATCHED lines (backend-governed)."
+                              type="Information"
+                              showIcon="true"
+                              class="sapUiSmallMarginBottom"
+                            />
+
+                            <Label text="Notes" />
+                            <TextArea value="{cash>/notes}" width="100%" growing="true" growingMaxLines="6" />
+
+                            <HBox class="sapUiSmallMarginTop" width="100%" justifyContent="End" renderType="Bare">
+                              <Button
+                                text="Flag Discrepancy"
+                                type="Reject"
+                                press="onFlagDiscrepancy"
+                                enabled="{= !!${cash>/selectedLineId} && ${cash>/selectedLineStatus} === 'UNMATCHED' }"
+                              />
+                              <Button
+                                text="Match"
+                                type="Emphasized"
+                                class="sapUiTinyMarginBegin"
+                                press="onMatch"
+                                enabled="{= !!${cash>/selectedLineId} && !!${cash>/selectedTxId} && ${cash>/selectedLineStatus} === 'UNMATCHED' }"
+                              />
+                            </HBox>
+
+                            <MessageStrip
+                              text="Select a statement line, then select a transaction (Transactions tab), then press Match. Use Flag Discrepancy when no transaction exists."
+                              type="Information"
+                              showIcon="true"
+                              class="sapUiSmallMarginTop"
+                            />
+                          </VBox>
+                        </HBox>
+                      </VBox>
+                    </IconTabFilter>
+                  </items>
+                </IconTabBar>

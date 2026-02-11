@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
 from sqlalchemy import select
@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.db.session import get_db
 from app.core.security.rbac import require_role
-from app.domain.cash_management.enums import CashTransactionDirection, CashTransactionStatus
+from app.domain.cash_management.enums import CashTransactionDirection, CashTransactionStatus, ReconciliationStatus
 from app.domain.cash_management.models.cash import CashTransaction
 from app.domain.cash_management.models.bank_statements import BankStatementLine, BankStatementUpload
 from app.domain.cash_management.service import (
@@ -31,6 +31,7 @@ from app.domain.cash_management.services.reconciliation import (
     upload_bank_statement,
 )
 from app.services.blob_storage import upload_bytes_idempotent
+from app.core.db.audit import write_audit_event
 
 
 router = APIRouter(prefix="/funds/{fund_id}/cash", tags=["Cash Management"])
@@ -97,6 +98,90 @@ def _line_out(line: BankStatementLine) -> dict:
         "reconciled_by": line.reconciled_by,
         "reconciliation_notes": line.reconciliation_notes,
     }
+
+
+@router.post("/reconciliation/match")
+def manual_match(
+    fund_id: uuid.UUID,
+    payload: dict,
+    db: Session = Depends(get_db),
+    actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN"])),
+):
+    """Manually match (or flag discrepancy) for a statement line.
+
+    Payload:
+      - statement_line_id: UUID
+      - transaction_id: UUID (optional if discrepancy)
+      - reconciliation_status: MATCHED | DISCREPANCY (optional, default MATCHED)
+      - notes: optional
+    """
+    _require_fund_access(fund_id, actor)
+
+    if "statement_line_id" not in payload:
+        raise HTTPException(status_code=400, detail="statement_line_id is required")
+
+    line_id = uuid.UUID(str(payload["statement_line_id"]))
+    line = db.execute(
+        select(BankStatementLine).where(
+            BankStatementLine.fund_id == fund_id,
+            BankStatementLine.id == line_id,
+        )
+    ).scalar_one_or_none()
+    if not line:
+        raise HTTPException(status_code=404, detail="Statement line not found")
+
+    if line.reconciliation_status != ReconciliationStatus.UNMATCHED:
+        raise HTTPException(status_code=400, detail="Statement line is already reconciled")
+
+    status_raw = payload.get("reconciliation_status") or ReconciliationStatus.MATCHED.value
+    try:
+        new_status = ReconciliationStatus(status_raw)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid reconciliation_status")
+
+    if new_status not in (ReconciliationStatus.MATCHED, ReconciliationStatus.DISCREPANCY):
+        raise HTTPException(status_code=400, detail="Invalid reconciliation_status")
+
+    tx_id_raw = payload.get("transaction_id")
+    tx_id: uuid.UUID | None = uuid.UUID(str(tx_id_raw)) if tx_id_raw else None
+    tx: CashTransaction | None = None
+    if new_status == ReconciliationStatus.MATCHED:
+        if not tx_id:
+            raise HTTPException(status_code=400, detail="transaction_id is required for MATCHED")
+        tx = db.execute(
+            select(CashTransaction).where(
+                CashTransaction.fund_id == fund_id,
+                CashTransaction.id == tx_id,
+            )
+        ).scalar_one_or_none()
+        if not tx:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+    else:
+        if tx_id:
+            raise HTTPException(status_code=400, detail="transaction_id must be omitted for DISCREPANCY")
+
+    before = _line_out(line)
+    line.matched_transaction_id = tx.id if tx else None
+    line.reconciliation_status = new_status
+    line.reconciled_at = datetime.now(timezone.utc)
+    line.reconciled_by = actor.actor_id
+    line.reconciliation_notes = payload.get("notes")
+    line.updated_by = actor.actor_id
+
+    write_audit_event(
+        db,
+        fund_id=fund_id,
+        actor_id=actor.actor_id,
+        action="CASH_RECONCILIATION_MATCHED" if new_status == ReconciliationStatus.MATCHED else "CASH_RECONCILIATION_DISCREPANCY",
+        entity_type="bank_statement_line",
+        entity_id=line.id,
+        before=before,
+        after=_line_out(line),
+    )
+
+    db.commit()
+    db.refresh(line)
+    return {"line": _line_out(line)}
 
 
 @router.get("/transactions")

@@ -37,7 +37,26 @@ jobs:
           set -euo pipefail
           python -m pip install -U pip
           rm -rf .python_packages
-          python -m pip install -r backend/requirements.txt --target .python_packages/lib/site-packages
+          # IMPORTANT: Azure App Service Linux images can run older glibc than the GitHub runner.
+          # If we build native deps (e.g., cryptography) on the runner, we can ship binaries that
+          # fail at runtime with errors like: "GLIBC_2.xx not found".
+          #
+          # To avoid this, download and install ONLY prebuilt manylinux wheels for CPython 3.11.
+          rm -rf .wheelhouse
+          python -m pip download \
+            --dest .wheelhouse \
+            --only-binary=:all: \
+            --platform manylinux2014_x86_64 \
+            --python-version 311 \
+            --implementation cp \
+            --abi cp311 \
+            -r backend/requirements.txt
+
+          python -m pip install \
+            --no-index \
+            --find-links .wheelhouse \
+            -r backend/requirements.txt \
+            --target .python_packages/lib/site-packages
 
       - name: Create deploy.zip (root contains backend/ + .deployment)
         shell: bash
@@ -104,12 +123,12 @@ jobs:
             --name "${AZURE_WEBAPP_NAME}" \
             --settings \
               SCM_DO_BUILD_DURING_DEPLOYMENT=false \
-              WEBSITE_RUN_FROM_PACKAGE=1 \
+              WEBSITE_RUN_FROM_PACKAGE=0 \
               PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages
 
           # Use single-quotes for assignment so $PORT is not expanded on the runner.
           # App Service will expand $PORT at runtime inside the inner double-quotes.
-          STARTUP_CMD='bash -c "cd backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120"'
+          STARTUP_CMD='bash -c "cd /home/site/wwwroot/backend && PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:\"$PORT\" --timeout 120"'
           az webapp config set \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --name "${AZURE_WEBAPP_NAME}" \
@@ -118,18 +137,44 @@ jobs:
           # Avoid SCM restarts racing with zip deploy
           sleep 20
 
+      - name: Purge stale Oryx build artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Previous Oryx-based deployments leave oryx-manifest.toml and output.tar.zst
+          # at /home/site/wwwroot/. When the container starts, the Oryx startup script
+          # detects these, extracts the OLD build to /tmp/, redirects the app path there,
+          # and overwrites PYTHONPATH — causing the new zip deployment to be ignored.
+          # We delete them via the Kudu VFS REST API before deploying the new zip.
+          KUDU_URL="https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net"
+          TOKEN=$(az account get-access-token --query accessToken -o tsv)
+
+          for artifact in oryx-manifest.toml output.tar.zst; do
+            echo "Deleting ${artifact} from wwwroot (if exists)..."
+            curl -sf -X DELETE \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "If-Match: *" \
+              "${KUDU_URL}/api/vfs/site/wwwroot/${artifact}" \
+              && echo "  deleted." \
+              || echo "  not found or already gone — OK."
+          done
+
       - name: Deploy (az webapp deploy)
         shell: bash
         run: |
           set -euo pipefail
 
-          # Deploy synchronously; rely on /health smoke test as the source of truth.
+          # Deploy synchronously with --clean to remove ALL residual files from
+          # the target directory before extracting the new zip.
+          # This prevents stale Oryx artifacts from hijacking the container startup.
           # NOTE: --timeout is in milliseconds for `az webapp deploy`.
           az webapp deploy \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --name "${AZURE_WEBAPP_NAME}" \
             --type zip \
             --src-path deploy.zip \
+            --clean true \
             --timeout 1800000
 
       - name: Smoke test /health
