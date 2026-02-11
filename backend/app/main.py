@@ -22,6 +22,7 @@ from app.modules.compliance.routes import router as compliance_router
 from app.modules.deals.routes import router as deals_router
 from app.modules.documents.routes import router as documents_router
 from app.modules.portfolio.routes import router as portfolio_router
+from app.modules.signatures.routes import router as signatures_router
 from app.domain.documents.routes.ingest import router as documents_ingest_router
 from app.domain.portfolio.routes.assets import router as assets_router
 from app.domain.portfolio.routes.alerts import router as alerts_router
@@ -38,6 +39,7 @@ from app.domain.documents.routes.evidence import router as evidence_router
 from app.domain.reporting.routes.report_packs import router as report_packs_router
 from app.domain.reporting.routes.investor_portal import router as investor_portal_router
 from app.domain.reporting.routes.evidence_pack import router as evidence_pack_router
+from app.domain.reporting.routes.reports import router as reports_router
 from app.domain.dataroom.routes import router as dataroom_router
 from app.domain.cash_management.routes import router as cash_router
 
@@ -131,7 +133,12 @@ def create_app() -> FastAPI:
     fund_router.include_router(documents_router)
     fund_router.include_router(documents_ingest_router)
     fund_router.include_router(ai_router)
+    fund_router.include_router(signatures_router)
     app.include_router(fund_router)
+
+    # Azure Static Web Apps (linked backend) proxies requests under /api/*.
+    # Provide /api aliases without breaking existing routes.
+    app.include_router(fund_router, prefix="/api")
 
     # Domain portfolio (asset-first + subtype extensions)
     app.include_router(assets_router)
@@ -149,8 +156,29 @@ def create_app() -> FastAPI:
     app.include_router(report_packs_router)
     app.include_router(investor_portal_router)
     app.include_router(evidence_pack_router)
+    app.include_router(reports_router)
     app.include_router(dataroom_router)
     app.include_router(cash_router)
+
+    # /api aliases for all domain routers.
+    app.include_router(assets_router, prefix="/api")
+    app.include_router(fund_investments_router, prefix="/api")
+    app.include_router(obligations_router, prefix="/api")
+    app.include_router(alerts_router, prefix="/api")
+    app.include_router(portfolio_actions_router, prefix="/api")
+    app.include_router(domain_deals_router, prefix="/api")
+    app.include_router(conversion_router, prefix="/api")
+    app.include_router(ic_memos_router, prefix="/api")
+    app.include_router(governed_actions_router, prefix="/api")
+    app.include_router(evidence_upload_router, prefix="/api")
+    app.include_router(auditor_router, prefix="/api")
+    app.include_router(evidence_router, prefix="/api")
+    app.include_router(report_packs_router, prefix="/api")
+    app.include_router(investor_portal_router, prefix="/api")
+    app.include_router(evidence_pack_router, prefix="/api")
+    app.include_router(reports_router, prefix="/api")
+    # NOTE: dataroom_router already uses prefix '/api/dataroom' (avoid '/api/api/...').
+    app.include_router(cash_router, prefix="/api")
 
     return app
 

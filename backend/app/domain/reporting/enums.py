@@ -15,3 +15,22 @@ class ReportSectionType(str, Enum):
     ACTIONS = "ACTIONS"
     BREACHES = "BREACHES"
 
+
+class NavSnapshotStatus(str, Enum):
+    DRAFT = "DRAFT"
+    FINALIZED = "FINALIZED"
+    PUBLISHED = "PUBLISHED"
+
+
+class ValuationMethod(str, Enum):
+    AMORTIZED_COST = "AMORTIZED_COST"
+    FAIR_VALUE = "FAIR_VALUE"
+    EXTERNAL_MARK = "EXTERNAL_MARK"
+    ADMIN_ESTIMATE = "ADMIN_ESTIMATE"
+
+
+class MonthlyPackType(str, Enum):
+    INVESTOR_REPORT = "INVESTOR_REPORT"
+    AUDITOR_PACK = "AUDITOR_PACK"
+    ADMIN_PACKAGE = "ADMIN_PACKAGE"
+

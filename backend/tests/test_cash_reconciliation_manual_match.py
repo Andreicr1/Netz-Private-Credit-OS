@@ -39,13 +39,16 @@ def test_manual_reconciliation_match_happy_path(client: TestClient, db_session: 
         f"/funds/{fund_id}/cash/transactions",
         json={
             "type": CashTransactionType.OTHER.value,
-            "amount": 123.45,
+            "direction": "INFLOW",
+            "amount_usd": 123.45,
+            "counterparty": "Incoming wire",
+            "justification_type": "OM_CLAUSE",
+            "justification_document_id": "doc://test",
             "value_date": date.today().isoformat(),
-            "currency": "USD",
         },
     )
     assert tx_resp.status_code == 200
-    tx_id = tx_resp.json()["transaction_id"]
+    tx_id = tx_resp.json()["id"]
 
     statement_id = _create_statement_upload(db_session, fund_id)
 

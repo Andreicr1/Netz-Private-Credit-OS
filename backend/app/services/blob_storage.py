@@ -32,6 +32,12 @@ def _account_url() -> str:
 def _use_local_storage() -> bool:
     if settings.env == Env.prod:
         return False
+    # In non-prod environments, treat placeholder configuration as "not configured".
+    # This keeps unit tests and local runs deterministic and avoids accidental network calls.
+    if settings.STORAGE_ACCOUNT_URL and "example.blob.core.windows.net" in settings.STORAGE_ACCOUNT_URL:
+        return True
+    if settings.AZURE_STORAGE_ACCOUNT and settings.AZURE_STORAGE_ACCOUNT.lower() == "example":
+        return True
     return not (settings.STORAGE_ACCOUNT_URL or settings.AZURE_STORAGE_ACCOUNT)
 
 

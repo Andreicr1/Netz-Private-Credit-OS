@@ -32,7 +32,12 @@ from app.domain.deals.models import ic_memos as _domain_ic_memos  # noqa: F401,E
 from app.domain.documents.models import evidence as _domain_evidence  # noqa: F401,E402
 from app.domain.reporting.models import report_packs as _domain_report_packs  # noqa: F401,E402
 from app.domain.reporting.models import report_sections as _domain_report_sections  # noqa: F401,E402
+from app.domain.reporting.models import nav_snapshots as _domain_nav_snapshots  # noqa: F401,E402
+from app.domain.reporting.models import asset_valuation_snapshots as _domain_asset_valuations  # noqa: F401,E402
+from app.domain.reporting.models import investor_statements as _domain_investor_statements  # noqa: F401,E402
 from app.domain.cash_management.models import cash as _domain_cash  # noqa: F401,E402
+from app.domain.cash_management.models import bank_statements as _domain_bank_statements  # noqa: F401,E402
+from app.domain.cash_management.models import reconciliation_matches as _domain_recon_matches  # noqa: F401,E402
 
 
 config = context.config

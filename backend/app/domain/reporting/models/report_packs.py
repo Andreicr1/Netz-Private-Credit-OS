@@ -3,11 +3,11 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum as SAEnum, String, Uuid
+from sqlalchemy import Date, DateTime, Enum as SAEnum, ForeignKey, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db.base import Base
-from app.domain.reporting.enums import ReportPackStatus
+from app.domain.reporting.enums import MonthlyPackType, ReportPackStatus
 
 
 class MonthlyReportPack(Base):
@@ -19,6 +19,22 @@ class MonthlyReportPack(Base):
 
     period_start: Mapped[date] = mapped_column(Date, nullable=False)
     period_end: Mapped[date] = mapped_column(Date, nullable=False)
+
+    # EPIC 11 linkage/output metadata (nullable for backward compatibility with EPIC 8/legacy packs)
+    nav_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("nav_snapshots.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    blob_path: Mapped[str | None] = mapped_column(String(800), nullable=True)
+    generated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    generated_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    pack_type: Mapped[MonthlyPackType | None] = mapped_column(
+        SAEnum(MonthlyPackType, name="monthly_pack_type_enum"),
+        nullable=True,
+        index=True,
+    )
 
     status: Mapped[ReportPackStatus] = mapped_column(
         SAEnum(ReportPackStatus, name="report_pack_status_enum"),

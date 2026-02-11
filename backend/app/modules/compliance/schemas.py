@@ -37,6 +37,52 @@ class ObligationOut(BaseModel):
     updated_at: dt.datetime
 
 
+class ObligationWorkflowOut(ObligationOut):
+    workflow_status: str = Field(default="OPEN", max_length=32)
+
+
+class ObligationEvidenceLinkIn(BaseModel):
+    document_id: uuid.UUID
+    version_id: uuid.UUID | None = None
+
+
+class ObligationEvidenceOut(BaseModel):
+    document_id: uuid.UUID
+    version_id: uuid.UUID | None
+    title: str
+    root_folder: str | None
+    folder_path: str | None
+    linked_at: dt.datetime
+    linked_by: str
+
+
+class ActorMeOut(BaseModel):
+    actor_id: str
+    roles: list[str]
+
+
+class ComplianceSnapshotOut(BaseModel):
+    generated_at_utc: dt.datetime
+    total_open_obligations: int
+    total_ai_gaps: int
+    closed_obligations_last_30_days: int
+
+
+class AuditEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    created_at: dt.datetime
+    actor_id: str
+    actor_roles: list[str]
+    action: str
+    entity_type: str
+    entity_id: str
+    before: dict | None
+    after: dict | None
+    request_id: str
+
+
 class ObligationStatusOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -89,3 +89,13 @@ class AIAnswerResponse(BaseModel):
     answer: str
     citations: list[AIAnswerCitationOut]
 
+
+class AIActivityItemOut(BaseModel):
+    question_id: str
+    answer_id: str
+    question: str | None
+    asked_by: str | None
+    timestamp_utc: dt.datetime | None
+    insufficient_evidence: bool
+    citations_count: int
+

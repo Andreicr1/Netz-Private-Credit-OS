@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.db.audit import write_audit_event
 from app.core.db.session import get_db
@@ -25,6 +25,7 @@ from app.modules.ai.schemas import (
     AIAnswerRequest,
     AIAnswerResponse,
     AIAnswerCitationOut,
+    AIActivityItemOut,
     Page,
 )
 from app.domain.ai.services.ai_scope import enforce_root_folder_scope, filter_hits_by_scope
@@ -44,6 +45,65 @@ def _limit(limit: int = Query(50, ge=1, le=200)) -> int:
 
 def _offset(offset: int = Query(0, ge=0, le=10_000)) -> int:
     return offset
+
+
+@router.get("/activity", response_model=Page[AIActivityItemOut])
+def activity(
+    fund_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    limit: int = Depends(_limit),
+    offset: int = Depends(_offset),
+    _role_guard: Actor = Depends(require_roles([Role.GP, Role.COMPLIANCE, Role.INVESTMENT_TEAM, Role.AUDITOR])),
+) -> Page[AIActivityItemOut]:
+    # Latest answers (authoritative activity log)
+    answers = list(
+        db.execute(
+            select(AIAnswer)
+            .where(AIAnswer.fund_id == fund_id)
+            .order_by(AIAnswer.created_at_utc.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        .scalars()
+        .all()
+    )
+
+    question_ids = [a.question_id for a in answers]
+    by_q = {}
+    if question_ids:
+        qs = list(db.execute(select(AIQuestion).where(AIQuestion.fund_id == fund_id, AIQuestion.id.in_(question_ids))).scalars().all())
+        by_q = {q.id: q for q in qs}
+
+    answer_ids = [a.id for a in answers]
+    citations_count_by_answer: dict[uuid.UUID, int] = {a.id: 0 for a in answers}
+    if answer_ids:
+        rows = list(
+            db.execute(
+                select(AIAnswerCitation.answer_id, func.count())
+                .where(AIAnswerCitation.fund_id == fund_id, AIAnswerCitation.answer_id.in_(answer_ids))
+                .group_by(AIAnswerCitation.answer_id)
+            ).all()
+        )
+        for aid, cnt in rows:
+            citations_count_by_answer[aid] = int(cnt or 0)
+
+    items: list[AIActivityItemOut] = []
+    for a in answers:
+        q = by_q.get(a.question_id)
+        ans_text = a.answer_text or ""
+        items.append(
+            AIActivityItemOut(
+                question_id=str(a.question_id),
+                answer_id=str(a.id),
+                question=q.question_text if q else None,
+                asked_by=q.actor_id if q else None,
+                timestamp_utc=a.created_at_utc,
+                insufficient_evidence=ans_text == "Insufficient evidence in the Data Room",
+                citations_count=int(citations_count_by_answer.get(a.id, 0)),
+            )
+        )
+
+    return Page(items=items, limit=limit, offset=offset)
 
 
 @router.post("/query")

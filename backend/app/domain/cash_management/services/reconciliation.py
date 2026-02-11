@@ -201,6 +201,7 @@ def upload_bank_statement(
     original_filename: str | None = None,
     sha256: str | None = None,
     notes: str | None = None,
+    commit: bool = True,
 ) -> BankStatementUpload:
     """
     Register a bank statement upload as immutable evidence.
@@ -226,15 +227,16 @@ def upload_bank_statement(
         db,
         fund_id=fund_id,
         actor_id=actor.actor_id,
-        action="cash.bank_statement.upload",
+        action="BANK_STATEMENT_UPLOADED",
         entity_type="bank_statement_upload",
         entity_id=upload.id,
         before=None,
         after=sa_model_to_dict(upload),
     )
-    
-    db.commit()
-    db.refresh(upload)
+
+    if commit:
+        db.commit()
+        db.refresh(upload)
     return upload
 
 
@@ -248,6 +250,7 @@ def add_statement_line(
     description: str,
     amount_usd: float,
     direction: CashTransactionDirection,
+    commit: bool = True,
 ) -> BankStatementLine:
     """
     Add a manual statement line entry.
@@ -271,13 +274,14 @@ def add_statement_line(
         db,
         fund_id=fund_id,
         actor_id=actor.actor_id,
-        action="cash.bank_statement_line.create",
+        action="BANK_STATEMENT_LINE_CREATED",
         entity_type="bank_statement_line",
         entity_id=line.id,
         before=None,
         after=sa_model_to_dict(line),
     )
-    
-    db.commit()
-    db.refresh(line)
+
+    if commit:
+        db.commit()
+        db.refresh(line)
     return line

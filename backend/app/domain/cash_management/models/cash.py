@@ -93,6 +93,10 @@ class CashTransaction(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
     admin_contact: Mapped[str | None] = mapped_column(String(255), nullable=True)
     execution_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     bank_reference: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Reconciliation confirmation (explicit, audit-grade)
+    reconciled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reconciled_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
     notes: Mapped[str | None] = mapped_column(String(4000), nullable=True)
 
     # Evidence pointers

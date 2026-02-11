@@ -1,19 +1,22 @@
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import uuid
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.db.session import get_db
 from app.core.security.rbac import require_role
 from app.domain.cash_management.enums import CashTransactionDirection, CashTransactionStatus, ReconciliationStatus
-from app.domain.cash_management.models.cash import CashTransaction
+from app.domain.cash_management.models.cash import CashTransaction, CashTransactionApproval
 from app.domain.cash_management.models.bank_statements import BankStatementLine, BankStatementUpload
+from app.domain.cash_management.models.reconciliation_matches import ReconciliationMatch
 from app.domain.cash_management.service import (
     approve,
     create_transaction,
@@ -37,18 +40,149 @@ from app.core.db.audit import write_audit_event
 router = APIRouter(prefix="/funds/{fund_id}/cash", tags=["Cash Management"])
 
 
-def _tx_out(tx: CashTransaction) -> dict:
+@router.get("/snapshot")
+def snapshot(
+    fund_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor=Depends(require_role(["INVESTMENT_TEAM", "COMPLIANCE", "GP", "ADMIN", "AUDITOR"])),
+):
+    _require_fund_access(fund_id, actor)
+
+    # USD-only by contract (institutional snapshot).
+    inflows_usd = db.execute(
+        select(func.coalesce(func.sum(CashTransaction.amount), 0)).where(
+            CashTransaction.fund_id == fund_id,
+            CashTransaction.currency == "USD",
+            CashTransaction.direction == CashTransactionDirection.INFLOW,
+        )
+    ).scalar_one()
+
+    outflows_usd = db.execute(
+        select(func.coalesce(func.sum(CashTransaction.amount), 0)).where(
+            CashTransaction.fund_id == fund_id,
+            CashTransaction.currency == "USD",
+            CashTransaction.direction == CashTransactionDirection.OUTFLOW,
+        )
+    ).scalar_one()
+
+    pending_signatures = db.execute(
+        select(func.count()).select_from(CashTransaction).where(
+            CashTransaction.fund_id == fund_id,
+            CashTransaction.status.in_(
+                [
+                    CashTransactionStatus.PENDING_APPROVAL,
+                    CashTransactionStatus.APPROVED,
+                    CashTransactionStatus.SENT_TO_ADMIN,
+                ]
+            ),
+        )
+    ).scalar_one()
+
+    now = datetime.now(timezone.utc)
+    month_start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    executed_this_month = db.execute(
+        select(func.count()).select_from(CashTransaction).where(
+            CashTransaction.fund_id == fund_id,
+            CashTransaction.status == CashTransactionStatus.EXECUTED,
+            CashTransaction.execution_confirmed_at.isnot(None),
+            CashTransaction.execution_confirmed_at >= month_start,
+        )
+    ).scalar_one()
+
+    unreconciled_lines = db.execute(
+        select(func.count()).select_from(BankStatementLine).where(
+            BankStatementLine.fund_id == fund_id,
+            BankStatementLine.reconciliation_status == ReconciliationStatus.UNMATCHED,
+        )
+    ).scalar_one()
+
+    last_recon = db.execute(
+        select(func.max(BankStatementLine.reconciled_at)).where(
+            BankStatementLine.fund_id == fund_id,
+            BankStatementLine.reconciled_at.isnot(None),
+            BankStatementLine.reconciliation_status.in_([ReconciliationStatus.MATCHED, ReconciliationStatus.DISCREPANCY]),
+        )
+    ).scalar_one()
+
     return {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "total_inflows_usd": float(inflows_usd),
+        "total_outflows_usd": float(outflows_usd),
+        "pending_signatures": int(pending_signatures or 0),
+        "executed_transactions_month": int(executed_this_month or 0),
+        "unreconciled_bank_lines": int(unreconciled_lines or 0),
+        "last_reconciliation_date": last_recon.isoformat() if last_recon else None,
+    }
+
+
+def _justification(tx: CashTransaction) -> tuple[str | None, str | None]:
+    if tx.investment_memo_document_id:
+        return "INVESTMENT_MEMO", str(tx.investment_memo_document_id)
+
+    basis = tx.policy_basis or []
+    if isinstance(basis, list):
+        for item in basis:
+            if isinstance(item, dict) and item.get("document_id"):
+                return "OM_CLAUSE", str(item.get("document_id"))
+    return None, None
+
+
+def _api_type(tx: CashTransaction) -> str:
+    t = tx.type.value
+    if t in ("FUND_EXPENSE", "EXPENSE"):
+        return "EXPENSE"
+    if t == "INVESTMENT":
+        return "INVESTMENT"
+    if t in ("BANK_FEE", "FEE"):
+        return "FEE"
+    if t in ("LP_SUBSCRIPTION", "CAPITAL_CALL"):
+        return "INCOME"
+    return "OTHER"
+
+
+def _api_status(tx: CashTransaction) -> str:
+    if getattr(tx, "reconciled_at", None):
+        return "RECONCILED"
+    if tx.status == CashTransactionStatus.DRAFT:
+        return "DRAFT"
+    if tx.status == CashTransactionStatus.PENDING_APPROVAL:
+        return "PENDING_SIGNATURE"
+    if tx.status in (CashTransactionStatus.APPROVED, CashTransactionStatus.SENT_TO_ADMIN):
+        return "SIGNED"
+    if tx.status == CashTransactionStatus.EXECUTED:
+        return "EXECUTED"
+    return tx.status.value
+
+
+def _tx_out(tx: CashTransaction, *, director_signatures_count: int | None = None) -> dict:
+    j_type, j_doc = _justification(tx)
+    return {
+        # EPIC 10 canonical fields
         "id": str(tx.id),
         "fund_id": str(tx.fund_id),
+        "type": _api_type(tx),
+        "direction": tx.direction.value,
+        "amount_usd": float(tx.amount),
+        "counterparty": tx.beneficiary_name,
+        "justification_type": j_type,
+        "justification_document_id": j_doc,
+        "status": _api_status(tx),
+        "signature_status": {
+            "required": 2,
+            "current": director_signatures_count,
+        },
+        "reconciled": bool(getattr(tx, "reconciled_at", None)),
+        "reconciled_at": tx.reconciled_at.isoformat() if getattr(tx, "reconciled_at", None) else None,
+        "reconciled_by": getattr(tx, "reconciled_by", None),
+
+        # Legacy / extended details (kept for backward compatibility)
         "created_at": tx.created_at.isoformat() if tx.created_at else None,
         "updated_at": tx.updated_at.isoformat() if tx.updated_at else None,
         "value_date": tx.value_date.isoformat() if tx.value_date else None,
-        "type": tx.type.value,
-        "direction": tx.direction.value,
+        "type_raw": tx.type.value,
         "amount": float(tx.amount),
         "currency": tx.currency,
-        "status": tx.status.value,
+        "status_raw": tx.status.value,
         "reference_code": tx.reference_code,
         "beneficiary_name": tx.beneficiary_name,
         "beneficiary_bank": tx.beneficiary_bank,
@@ -168,15 +302,52 @@ def manual_match(
     line.reconciliation_notes = payload.get("notes")
     line.updated_by = actor.actor_id
 
+    # Append-only evidence of the reconciliation decision.
+    existing_match = db.execute(
+        select(ReconciliationMatch).where(ReconciliationMatch.fund_id == fund_id, ReconciliationMatch.bank_line_id == line.id)
+    ).scalar_one_or_none()
+    if existing_match:
+        raise HTTPException(status_code=400, detail="Statement line already has a reconciliation match record")
+
+    match_row = ReconciliationMatch(
+        fund_id=fund_id,
+        access_level="internal",
+        bank_line_id=line.id,
+        cash_transaction_id=(tx.id if tx else None),
+        matched_by=actor.actor_id,
+        matched_at=line.reconciled_at,
+        created_by=actor.actor_id,
+        updated_by=actor.actor_id,
+    )
+    db.add(match_row)
+    db.flush()
+
     write_audit_event(
         db,
         fund_id=fund_id,
         actor_id=actor.actor_id,
-        action="CASH_RECONCILIATION_MATCHED" if new_status == ReconciliationStatus.MATCHED else "CASH_RECONCILIATION_DISCREPANCY",
+        action="BANK_LINE_MATCHED",
         entity_type="bank_statement_line",
         entity_id=line.id,
         before=before,
         after=_line_out(line),
+    )
+
+    write_audit_event(
+        db,
+        fund_id=fund_id,
+        actor_id=actor.actor_id,
+        action="BANK_LINE_MATCHED",
+        entity_type="reconciliation_match",
+        entity_id=match_row.id,
+        before=None,
+        after={
+            "bank_line_id": str(line.id),
+            "cash_transaction_id": str(tx.id) if tx else None,
+            "matched_by": actor.actor_id,
+            "matched_at": line.reconciled_at.isoformat() if line.reconciled_at else None,
+            "status": new_status.value,
+        },
     )
 
     db.commit()
@@ -189,7 +360,7 @@ def list_transactions(
     fund_id: uuid.UUID,
     status: str | None = Query(default=None),
     db: Session = Depends(get_db),
-    actor=Depends(require_role(["INVESTMENT_TEAM", "COMPLIANCE", "GP", "ADMIN", "AUDITOR"])),
+    actor=Depends(require_role(["INVESTMENT_TEAM", "COMPLIANCE", "DIRECTOR", "GP", "ADMIN", "AUDITOR"])),
 ):
     _require_fund_access(fund_id, actor)
 
@@ -203,12 +374,59 @@ def list_transactions(
     stmt = stmt.order_by(CashTransaction.created_at.desc())
 
     txs = list(db.execute(stmt).scalars().all())
-    return {"items": [_tx_out(tx) for tx in txs]}
+    items: list[dict] = []
+    for tx in txs:
+        director_count = len(
+            {
+                a.approver_name
+                for a in db.execute(
+                    select(CashTransactionApproval).where(
+                        CashTransactionApproval.fund_id == fund_id,
+                        CashTransactionApproval.transaction_id == tx.id,
+                        CashTransactionApproval.approver_role == "DIRECTOR",
+                    )
+                )
+                .scalars()
+                .all()
+            }
+        )
+        items.append(_tx_out(tx, director_signatures_count=director_count))
+
+    return {"items": items}
 
 
 def _require_fund_access(fund_id: uuid.UUID, actor) -> None:
     if not actor.can_access_fund(fund_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden for this fund")
+
+
+@router.get("/transactions/{tx_id}")
+def get_transaction(
+    fund_id: uuid.UUID,
+    tx_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor=Depends(require_role(["INVESTMENT_TEAM", "COMPLIANCE", "DIRECTOR", "GP", "ADMIN", "AUDITOR"])),
+):
+    _require_fund_access(fund_id, actor)
+    tx = db.execute(select(CashTransaction).where(CashTransaction.fund_id == fund_id, CashTransaction.id == tx_id)).scalar_one_or_none()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    director_count = len(
+        {
+            a.approver_name
+            for a in db.execute(
+                select(CashTransactionApproval).where(
+                    CashTransactionApproval.fund_id == fund_id,
+                    CashTransactionApproval.transaction_id == tx.id,
+                    CashTransactionApproval.approver_role == "DIRECTOR",
+                )
+            )
+            .scalars()
+            .all()
+        }
+    )
+    return _tx_out(tx, director_signatures_count=director_count)
 
 
 @router.post("/transactions")
@@ -219,11 +437,57 @@ def create_tx(
     actor=Depends(require_role(["INVESTMENT_TEAM", "COMPLIANCE", "GP", "ADMIN"])),
 ):
     _require_fund_access(fund_id, actor)
+
+    api_type = str(payload.get("type") or "").strip().upper()
+    api_direction = str(payload.get("direction") or "").strip().upper()
+    amount_usd = payload.get("amount_usd")
+    counterparty = payload.get("counterparty")
+    justification_type = str(payload.get("justification_type") or "").strip().upper()
+    justification_document_id = payload.get("justification_document_id")
+
+    if api_type not in ("EXPENSE", "INVESTMENT", "INCOME", "FEE", "OTHER"):
+        raise HTTPException(status_code=400, detail="type must be EXPENSE|INVESTMENT|INCOME|FEE|OTHER")
+    if api_direction not in ("INFLOW", "OUTFLOW"):
+        raise HTTPException(status_code=400, detail="direction must be INFLOW|OUTFLOW")
+    if amount_usd is None:
+        raise HTTPException(status_code=400, detail="amount_usd is required")
+    if not counterparty:
+        raise HTTPException(status_code=400, detail="counterparty is required")
+    if justification_type not in ("OM_CLAUSE", "INVESTMENT_MEMO"):
+        raise HTTPException(status_code=400, detail="justification_type must be OM_CLAUSE|INVESTMENT_MEMO")
+    if not justification_document_id:
+        raise HTTPException(status_code=400, detail="justification_document_id is required")
+
+    type_map = {
+        "EXPENSE": "FUND_EXPENSE",
+        "INVESTMENT": "INVESTMENT",
+        "INCOME": "CAPITAL_CALL",
+        "FEE": "BANK_FEE",
+        "OTHER": "OTHER",
+    }
+
+    svc_payload: dict = {
+        "type": type_map[api_type],
+        "direction": api_direction,
+        "amount": float(amount_usd),
+        "value_date": payload.get("value_date") or date.today().isoformat(),
+        "beneficiary_name": str(counterparty),
+        "payment_reference": payload.get("notes") or payload.get("reference"),
+        "justification_text": payload.get("notes"),
+        "notes": payload.get("notes"),
+    }
+
+    if justification_type == "INVESTMENT_MEMO":
+        svc_payload["investment_memo_document_id"] = str(justification_document_id)
+    else:
+        svc_payload["policy_basis"] = [{"document_id": str(justification_document_id), "section": None, "excerpt": None}]
+
     try:
-        tx = create_transaction(db, fund_id=fund_id, actor=actor, payload=payload)
+        tx = create_transaction(db, fund_id=fund_id, actor=actor, payload=svc_payload)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    return {"transaction_id": str(tx.id), "status": tx.status.value}
+
+    return _tx_out(tx, director_signatures_count=0)
 
 
 @router.post("/transactions/{tx_id}/submit")
@@ -239,6 +503,192 @@ def submit(
         return {"transaction_id": str(tx.id), "status": tx.status.value}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.patch("/transactions/{tx_id}/submit-signature")
+def submit_signature(
+    fund_id: uuid.UUID,
+    tx_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor=Depends(require_role(["INVESTMENT_TEAM", "COMPLIANCE", "GP", "ADMIN"])),
+):
+    _require_fund_access(fund_id, actor)
+
+    tx = db.execute(select(CashTransaction).where(CashTransaction.fund_id == fund_id, CashTransaction.id == tx_id)).scalar_one_or_none()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    _, doc_id = _justification(tx)
+    if not doc_id:
+        raise HTTPException(status_code=400, detail="Cannot submit transaction without evidence document_id")
+
+    if tx.type.value == "INVESTMENT" and int(tx.ic_approvals_count or 0) < 2:
+        raise HTTPException(status_code=409, detail="Investment requires >=2 IC approvals before director signatures")
+
+    before = _tx_out(tx, director_signatures_count=None)
+    try:
+        tx = submit_transaction(db, fund_id=fund_id, actor=actor, tx_id=tx_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    write_audit_event(
+        db,
+        fund_id=fund_id,
+        actor_id=actor.actor_id,
+        action="CASH_TRANSACTION_SUBMITTED_FOR_SIGNATURE",
+        entity_type="cash_transaction",
+        entity_id=tx.id,
+        before=before,
+        after={"transaction_id": str(tx.id), "status": tx.status.value},
+    )
+    write_audit_event(
+        db,
+        fund_id=fund_id,
+        actor_id=actor.actor_id,
+        action="SIGNATURE_REQUEST_CREATED",
+        entity_type="signature_request",
+        entity_id=tx.id,
+        before=None,
+        after={"transaction_id": str(tx.id)},
+    )
+
+    db.commit()
+    db.refresh(tx)
+    director_count = len(
+        {
+            a.approver_name
+            for a in db.execute(
+                select(CashTransactionApproval).where(
+                    CashTransactionApproval.fund_id == fund_id,
+                    CashTransactionApproval.transaction_id == tx.id,
+                    CashTransactionApproval.approver_role == "DIRECTOR",
+                )
+            )
+            .scalars()
+            .all()
+        }
+    )
+    return _tx_out(tx, director_signatures_count=director_count)
+
+
+@router.patch("/transactions/{tx_id}/mark-executed")
+def mark_executed_patch(
+    fund_id: uuid.UUID,
+    tx_id: uuid.UUID,
+    payload: dict,
+    db: Session = Depends(get_db),
+    actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN"])),
+):
+    _require_fund_access(fund_id, actor)
+
+    try:
+        tx = mark_executed(
+            db,
+            fund_id=fund_id,
+            actor=actor,
+            tx_id=tx_id,
+            bank_reference=payload.get("bank_reference"),
+            notes=payload.get("notes"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    write_audit_event(
+        db,
+        fund_id=fund_id,
+        actor_id=actor.actor_id,
+        action="CASH_TRANSACTION_EXECUTED_CONFIRMED",
+        entity_type="cash_transaction",
+        entity_id=tx.id,
+        before=None,
+        after={
+            "transaction_id": str(tx.id),
+            "bank_reference": tx.bank_reference,
+            "executed_at": tx.execution_confirmed_at.isoformat() if tx.execution_confirmed_at else None,
+        },
+    )
+
+    db.commit()
+    db.refresh(tx)
+    director_count = len(
+        {
+            a.approver_name
+            for a in db.execute(
+                select(CashTransactionApproval).where(
+                    CashTransactionApproval.fund_id == fund_id,
+                    CashTransactionApproval.transaction_id == tx.id,
+                    CashTransactionApproval.approver_role == "DIRECTOR",
+                )
+            )
+            .scalars()
+            .all()
+        }
+    )
+    return _tx_out(tx, director_signatures_count=director_count)
+
+
+@router.patch("/transactions/{tx_id}/mark-reconciled")
+def mark_reconciled(
+    fund_id: uuid.UUID,
+    tx_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN"])),
+):
+    _require_fund_access(fund_id, actor)
+
+    tx = db.execute(select(CashTransaction).where(CashTransaction.fund_id == fund_id, CashTransaction.id == tx_id)).scalar_one_or_none()
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    if tx.status != CashTransactionStatus.EXECUTED:
+        raise HTTPException(status_code=409, detail="Only EXECUTED transactions can be marked reconciled")
+
+    has_match = db.execute(
+        select(func.count()).select_from(BankStatementLine).where(
+            BankStatementLine.fund_id == fund_id,
+            BankStatementLine.matched_transaction_id == tx.id,
+            BankStatementLine.reconciliation_status == ReconciliationStatus.MATCHED,
+        )
+    ).scalar_one()
+    if int(has_match or 0) < 1:
+        raise HTTPException(status_code=409, detail="Cannot mark reconciled without a matched bank statement line")
+
+    before = _tx_out(tx, director_signatures_count=None)
+    tx.reconciled_at = datetime.now(timezone.utc)
+    tx.reconciled_by = actor.actor_id
+    tx.updated_by = actor.actor_id
+
+    write_audit_event(
+        db,
+        fund_id=fund_id,
+        actor_id=actor.actor_id,
+        action="TRANSACTION_RECONCILED",
+        entity_type="cash_transaction",
+        entity_id=tx.id,
+        before=before,
+        after={
+            "transaction_id": str(tx.id),
+            "reconciled_at": tx.reconciled_at.isoformat() if tx.reconciled_at else None,
+            "reconciled_by": tx.reconciled_by,
+        },
+    )
+
+    db.commit()
+    db.refresh(tx)
+    director_count = len(
+        {
+            a.approver_name
+            for a in db.execute(
+                select(CashTransactionApproval).where(
+                    CashTransactionApproval.fund_id == fund_id,
+                    CashTransactionApproval.transaction_id == tx.id,
+                    CashTransactionApproval.approver_role == "DIRECTOR",
+                )
+            )
+            .scalars()
+            .all()
+        }
+    )
+    return _tx_out(tx, director_signatures_count=director_count)
 
 
 @router.post("/transactions/{tx_id}/approve/director")
@@ -444,6 +894,47 @@ async def upload_statement(
 
         data = await file.read()
         sha = hashlib.sha256(data).hexdigest()
+
+        parsed_lines: list[dict] = []
+        if lower.endswith(".csv"):
+            # CSV v1 contract (strict): headers must exist exactly.
+            # Required columns: value_date, direction, description, amount_usd
+            try:
+                text = data.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                text = data.decode("utf-8")
+
+            reader = csv.DictReader(io.StringIO(text))
+            if not reader.fieldnames:
+                raise HTTPException(status_code=400, detail="CSV has no header row")
+            required = {"value_date", "direction", "description", "amount_usd"}
+            missing = sorted(required - set(reader.fieldnames))
+            if missing:
+                raise HTTPException(status_code=400, detail=f"CSV missing required columns: {', '.join(missing)}")
+
+            for idx, row in enumerate(reader, start=2):
+                try:
+                    value_date = date.fromisoformat(str(row["value_date"]).strip())
+                    direction = CashTransactionDirection(str(row["direction"]).strip().upper())
+                    description = str(row["description"]).strip()
+                    amount_usd = float(str(row["amount_usd"]).strip())
+                except Exception as e:
+                    raise HTTPException(status_code=400, detail=f"Invalid CSV row {idx}: {e}")
+
+                if not description:
+                    raise HTTPException(status_code=400, detail=f"Invalid CSV row {idx}: description is empty")
+                if amount_usd <= 0:
+                    raise HTTPException(status_code=400, detail=f"Invalid CSV row {idx}: amount_usd must be > 0")
+
+                parsed_lines.append(
+                    {
+                        "value_date": value_date,
+                        "direction": direction,
+                        "description": description,
+                        "amount_usd": amount_usd,
+                    }
+                )
+
         safe = "".join(c for c in filename if c.isalnum() or c in ("-", "_", "."))
         safe = safe or "statement"
         blob_name = f"{fund_id}/cash/statements/{sha}/{safe}"
@@ -456,6 +947,7 @@ async def upload_statement(
             metadata={"fund_id": str(fund_id), "sha256": sha, "source": "bank_statement"},
         )
 
+        # Register upload and parsed lines atomically.
         upload = upload_bank_statement(
             db,
             fund_id=fund_id,
@@ -466,15 +958,58 @@ async def upload_statement(
             original_filename=filename,
             sha256=sha,
             notes=notes,
+            commit=False,
         )
+
+        created_line_ids: list[str] = []
+        for pl in parsed_lines:
+            line = add_statement_line(
+                db,
+                fund_id=fund_id,
+                actor=actor,
+                statement_id=upload.id,
+                value_date=pl["value_date"],
+                description=pl["description"],
+                amount_usd=pl["amount_usd"],
+                direction=pl["direction"],
+                commit=False,
+            )
+            created_line_ids.append(str(line.id))
+
+        db.commit()
+        db.refresh(upload)
+
         return {
             "statement_id": str(upload.id),
             "period_start": upload.period_start.isoformat(),
             "period_end": upload.period_end.isoformat(),
             "blob_path": upload.blob_path,
+            "lines_created": len(created_line_ids),
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/reconciliation/unmatched")
+def list_unmatched_bank_lines(
+    fund_id: uuid.UUID,
+    statement_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db),
+    actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN", "AUDITOR"])),
+):
+    """List bank statement lines with reconciliation_status=UNMATCHED (optionally filtered by statement)."""
+    _require_fund_access(fund_id, actor)
+    stmt = select(BankStatementLine).where(
+        BankStatementLine.fund_id == fund_id,
+        BankStatementLine.reconciliation_status == ReconciliationStatus.UNMATCHED,
+    )
+    if statement_id:
+        stmt = stmt.where(BankStatementLine.statement_id == statement_id)
+    stmt = stmt.order_by(BankStatementLine.value_date.asc())
+    lines = list(db.execute(stmt).scalars().all())
+    return {"items": [_line_out(l) for l in lines], "count": len(lines)}
 
 
 @router.get("/statements")

@@ -20,6 +20,7 @@ class AccessLevel(str, Enum):
 class Role(str, Enum):
     GP = "GP"
     COMPLIANCE = "COMPLIANCE"
+    DIRECTOR = "DIRECTOR"
     AUDITOR = "AUDITOR"
     INVESTOR = "INVESTOR"
     ADMIN = "ADMIN"

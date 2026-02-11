@@ -1,7 +1,9 @@
 sap.ui.define([], function () {
   "use strict";
 
-  var BASE_URL = "https://netz-prod-api.azurewebsites.net";
+  // Azure Static Web Apps proxies '/api/*' to the linked backend.
+  // Using a relative base avoids CORS and keeps environments consistent.
+  var BASE_URL = "/api";
 
   function isDevMode() {
     try {
