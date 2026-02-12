@@ -196,9 +196,9 @@ jobs:
               WEBSITE_RUN_FROM_PACKAGE=0 \
               PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages
 
-          # Startup command: cd into the backend directory and run gunicorn.
+          # Startup command: run schema migrations first, then start gunicorn.
           # $PORT is expanded at runtime by the container.
-          STARTUP_CMD='cd /home/site/wwwroot/backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
+          STARTUP_CMD='cd /home/site/wwwroot/backend && export PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages && alembic -c alembic.ini upgrade head && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
           az webapp config set \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --name "${AZURE_WEBAPP_NAME}" \
