@@ -2,22 +2,12 @@
   "name": "netz-private-credit-os-ui5",
   "version": "0.0.1",
   "private": true,
-  "type": "module",
-  "dependencies": {
-    "@ui5/webcomponents": "1.24.26",
-    "@ui5/webcomponents-base": "1.24.26",
-    "@ui5/webcomponents-fiori": "1.24.26",
-    "@ui5/webcomponents-icons": "1.24.26",
-    "@ui5/webcomponents-theming": "1.24.26"
-  },
   "devDependencies": {
     "@azure/static-web-apps-cli": "^2.0.8",
-    "vite": "^6.0.0"
+    "@ui5/cli": "^3.11.5"
   },
   "scripts": {
-    "dev": "vite",
-    "start": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "start": "ui5 serve -o index.html",
+    "build": "ui5 build --all"
   }
 }
