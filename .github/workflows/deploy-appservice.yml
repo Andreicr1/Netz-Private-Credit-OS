@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      promote:
+        description: "Promote staging slot to production after validation"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -14,13 +19,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Prefer GitHub repo/environment variables, but keep safe defaults so the workflow
-  # remains runnable even if vars are not configured.
   AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || 'Netz-International' }}
   AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'netz-prod-api' }}
   AZURE_WEBAPP_URL: ${{ vars.AZURE_WEBAPP_URL || 'https://netz-prod-api.azurewebsites.net' }}
-  # Optional: when set, the workflow will configure authsettingsV2 to allow anonymous.
-  # Leave unset to skip that management operation.
+  DEPLOY_SLOT: staging
   SWA_CLIENT_ID: ${{ vars.SWA_CLIENT_ID }}
 
 jobs:
@@ -41,13 +43,8 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install -U pip
-          rm -rf .python_packages
-          # IMPORTANT: Azure App Service Linux images can run older glibc than the GitHub runner.
-          # If we build native deps (e.g., cryptography) on the runner, we can ship binaries that
-          # fail at runtime with errors like: "GLIBC_2.xx not found".
-          #
-          # To avoid this, download and install ONLY prebuilt manylinux wheels for CPython 3.11.
-          rm -rf .wheelhouse
+          rm -rf .python_packages .wheelhouse
+
           python -m pip download \
             --dest .wheelhouse \
             --only-binary=:all: \
@@ -68,11 +65,6 @@ jobs:
         run: |
           set -euo pipefail
           rm -f deploy.zip
-
-          # Do NOT include a .deployment file. The `project = backend` directive
-          # causes Kudu to extract only the backend/ contents to wwwroot (flattening
-          # the directory structure), which makes `cd /home/site/wwwroot/backend` fail
-          # and also discards .python_packages/ since it's outside the project scope.
 
           zip -r deploy.zip backend .python_packages \
             -x "backend/__pycache__/*" \
@@ -103,7 +95,6 @@ jobs:
                   print(' -', n)
               sys.exit(1)
 
-          # Verify backend/app/main.py exists (sanity check for startup command)
           if 'backend/app/main.py' not in z.namelist():
               print('ERROR: deploy.zip missing backend/app/main.py')
               sys.exit(1)
@@ -114,12 +105,29 @@ jobs:
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
-          # Support both the "standard" secret names and the Azure-generated ones.
           client-id: ${{ secrets.AZURE_CLIENT_ID || secrets.AZUREAPPSERVICE_CLIENTID_426D9D8CF5E44278B95832DF7A8B952C }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID || secrets.AZUREAPPSERVICE_TENANTID_86103DA9D503455CBA1DD528317C4086 }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID || secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_2DB64B82AB4142F0BF1A20F53F83988A }}
 
-      - name: Ensure App Service runtime is Python 3.11
+      - name: Ensure staging slot exists
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SLOT_EXISTS=$(az webapp deployment slot list \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --query "[?name=='${DEPLOY_SLOT}'] | length(@)" -o tsv)
+
+          if [[ "${SLOT_EXISTS}" == "0" ]]; then
+            az webapp deployment slot create \
+              --resource-group "${AZURE_RESOURCE_GROUP}" \
+              --name "${AZURE_WEBAPP_NAME}" \
+              --slot "${DEPLOY_SLOT}" \
+              --configuration-source "${AZURE_WEBAPP_NAME}"
+          fi
+
+      - name: Ensure App Service runtime is Python 3.11 (prod + slot)
         shell: bash
         run: |
           set -euo pipefail
@@ -129,80 +137,89 @@ jobs:
             --name "${AZURE_WEBAPP_NAME}" \
             --linux-fx-version "PYTHON|3.11"
 
-      - name: Ensure site is started (Kudu needs a running site)
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          state=$(az webapp show --resource-group "${AZURE_RESOURCE_GROUP}" --name "${AZURE_WEBAPP_NAME}" --query state -o tsv)
-          echo "Current site state: ${state}"
-
-          if [[ "${state}" != "Running" ]]; then
-            az webapp start --resource-group "${AZURE_RESOURCE_GROUP}" --name "${AZURE_WEBAPP_NAME}"
-            echo "Waiting 60s for SCM container to stabilize after start..."
-            sleep 60
-          fi
-
-      - name: Pre-set safe startup command (before deploy)
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          SAFE_STARTUP='cd /home/site/wwwroot/backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
           az webapp config set \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --name "${AZURE_WEBAPP_NAME}" \
-            --startup-file "${SAFE_STARTUP}"
+            --slot "${DEPLOY_SLOT}" \
+            --linux-fx-version "PYTHON|3.11"
 
-      - name: Deploy (Kudu zipdeploy async)
+      - name: Configure appsettings + startup (prod + slot)
         shell: bash
         run: |
           set -euo pipefail
 
-          KUDU_URL="https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net"
+          STARTUP_CMD='cd /home/site/wwwroot/backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
+
+          az webapp config appsettings set \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --settings \
+              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+              WEBSITE_RUN_FROM_PACKAGE=0 \
+              PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages
+
+          az webapp config appsettings set \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --slot "${DEPLOY_SLOT}" \
+            --settings \
+              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+              WEBSITE_RUN_FROM_PACKAGE=0 \
+              PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages
+
+          az webapp config set \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --startup-file "${STARTUP_CMD}"
+
+          az webapp config set \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --slot "${DEPLOY_SLOT}" \
+            --startup-file "${STARTUP_CMD}"
+
+      - name: Deploy package to staging slot (Kudu zipdeploy)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SLOT_SCM_HOST="${AZURE_WEBAPP_NAME}-${DEPLOY_SLOT}.scm.azurewebsites.net"
+          KUDU_URL="https://${SLOT_SCM_HOST}"
           TOKEN=$(az account get-access-token --query accessToken -o tsv)
 
-          # Upload zip package directly to Kudu and trigger async deployment.
-          # We intentionally avoid az webapp deploy polling because it can block
-          # for long periods on startup status even when later steps do explicit
-          # health verification.
           curl -sf -X POST \
             -H "Authorization: Bearer ${TOKEN}" \
             -H "Content-Type: application/zip" \
             --data-binary @deploy.zip \
             "${KUDU_URL}/api/zipdeploy?isAsync=true"
 
-          # Give Kudu time to rsync the zip contents to wwwroot (takes ~2-3 min for 6k+ files)
-          echo "Waiting 180s for Kudu to extract the zip..."
+          echo "Waiting 180s for slot zip deploy extraction..."
           sleep 180
 
-      - name: Purge stale Oryx build artifacts
+      - name: Purge stale Oryx artifacts in staging slot
         shell: bash
         run: |
           set -euo pipefail
 
-          # If older Oryx-based deployments left artifacts at wwwroot, they can
-          # override the new content at startup. Removing them post-deploy avoids
-          # racing a zip deployment with a management/config operation.
-          KUDU_URL="https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net"
+          SLOT_SCM_HOST="${AZURE_WEBAPP_NAME}-${DEPLOY_SLOT}.scm.azurewebsites.net"
+          KUDU_URL="https://${SLOT_SCM_HOST}"
           TOKEN=$(az account get-access-token --query accessToken -o tsv)
 
           for artifact in oryx-manifest.toml output.tar.zst; do
-            echo "Deleting ${artifact} from wwwroot (if exists)..."
             curl -sf -X DELETE \
               -H "Authorization: Bearer ${TOKEN}" \
               -H "If-Match: *" \
               "${KUDU_URL}/api/vfs/site/wwwroot/${artifact}" \
-              && echo "  deleted." \
-              || echo "  not found or already gone — OK."
+              || true
           done
 
-      - name: Run Alembic migrations (Kudu command)
+      - name: Run Alembic migration on staging slot (Kudu command)
         shell: bash
         run: |
           set -euo pipefail
 
-          KUDU_URL="https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net"
+          SLOT_SCM_HOST="${AZURE_WEBAPP_NAME}-${DEPLOY_SLOT}.scm.azurewebsites.net"
+          KUDU_URL="https://${SLOT_SCM_HOST}"
           TOKEN=$(az account get-access-token --query accessToken -o tsv)
 
           CMD='/bin/bash /home/site/wwwroot/backend/scripts/run_alembic_migration.sh'
@@ -211,8 +228,6 @@ jobs:
             -H "Content-Type: application/json" \
             --data "$(printf '{\"command\":\"%s\",\"dir\":\"/home/site/wwwroot\"}' "${CMD}")" \
             "${KUDU_URL}/api/command")
-
-          echo "${RESP}"
 
           MIGRATION_RESP="${RESP}" python3 - <<'PY'
           import json
@@ -224,13 +239,7 @@ jobs:
               print("Missing migration response payload")
               sys.exit(1)
 
-          try:
-              data = json.loads(raw)
-          except Exception as exc:
-              print(f"Failed to parse migration response JSON: {exc}")
-              print(raw)
-              sys.exit(1)
-
+          data = json.loads(raw)
           output = data.get("Output", "")
           error = data.get("Error", "")
           exit_code = data.get("ExitCode")
@@ -257,77 +266,85 @@ jobs:
           print("Alembic migration completed successfully")
           PY
 
-      - name: Configure App Service build + startup (post-deploy)
+      - name: Smoke test staging slot /health
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SLOT_URL="https://${AZURE_WEBAPP_NAME}-${DEPLOY_SLOT}.azurewebsites.net"
+          HEALTH_URL="${SLOT_URL}/health"
+
+          for i in $(seq 1 40); do
+            HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' "${HEALTH_URL}" || echo "000")
+            if [[ "${HTTP_CODE}" == "200" ]]; then
+              echo "Staging slot health check passed"
+              exit 0
+            fi
+            echo "Staging attempt ${i}/40 -> HTTP ${HTTP_CODE}"
+            sleep 10
+          done
+
+          echo "Staging slot health check failed"
+          exit 1
+
+      - name: Optional authsettingsV2 config (production app)
         shell: bash
         env:
           AZURE_SUBSCRIPTION_ID_EFFECTIVE: ${{ secrets.AZURE_SUBSCRIPTION_ID || secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_2DB64B82AB4142F0BF1A20F53F83988A }}
         run: |
           set -euo pipefail
 
-          if [[ -z "${AZURE_RESOURCE_GROUP}" || -z "${AZURE_WEBAPP_NAME}" ]]; then
-            echo "Missing AZURE_RESOURCE_GROUP or AZURE_WEBAPP_NAME"
-            exit 1
-          fi
-
-          az webapp config appsettings set \
-            --resource-group "${AZURE_RESOURCE_GROUP}" \
-            --name "${AZURE_WEBAPP_NAME}" \
-            --settings \
-              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
-              WEBSITE_RUN_FROM_PACKAGE=0 \
-              PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages
-
-          # Startup command: start only Gunicorn. Migrations run in a dedicated step
-          # before startup config to avoid startup probe timeout.
-          # $PORT is expanded at runtime by the container.
-          STARTUP_CMD='cd /home/site/wwwroot/backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
-          az webapp config set \
-            --resource-group "${AZURE_RESOURCE_GROUP}" \
-            --name "${AZURE_WEBAPP_NAME}" \
-            --startup-file "${STARTUP_CMD}"
-
-          # Optional EasyAuth configuration: only run when SWA_CLIENT_ID is provided.
           if [[ -n "${SWA_CLIENT_ID:-}" ]]; then
-            if [[ -z "${AZURE_SUBSCRIPTION_ID_EFFECTIVE:-}" ]]; then
-              echo "SWA_CLIENT_ID is set, but subscription id secret is missing; cannot configure authsettingsV2."
-              exit 1
-            fi
-
             az rest --method PUT \
               --url "https://management.azure.com/subscriptions/${AZURE_SUBSCRIPTION_ID_EFFECTIVE}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.Web/sites/${AZURE_WEBAPP_NAME}/config/authsettingsV2?api-version=2023-12-01" \
               --body "{\"properties\":{\"platform\":{\"enabled\":true,\"runtimeVersion\":\"~1\"},\"globalValidation\":{\"requireAuthentication\":false,\"unauthenticatedClientAction\":\"AllowAnonymous\"},\"identityProviders\":{\"azureStaticWebApps\":{\"enabled\":true,\"registration\":{\"clientId\":\"${SWA_CLIENT_ID}\"}}}}}"
-          else
-            echo "SWA_CLIENT_ID not set; skipping authsettingsV2 configuration."
           fi
 
-          echo "Waiting 30s for config changes to apply..."
-          sleep 30
-
-      - name: Smoke test /health
+      - name: Swap staging slot to production
+        id: slot_swap
+        if: ${{ github.event_name == 'push' || inputs.promote }}
         shell: bash
         run: |
           set -euo pipefail
 
-          if [[ -n "${AZURE_WEBAPP_URL}" ]]; then
-            BASE_URL="${AZURE_WEBAPP_URL%/}"
-          else
-            BASE_URL="https://${AZURE_WEBAPP_NAME}.azurewebsites.net"
-          fi
+          az webapp deployment slot swap \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --slot "${DEPLOY_SLOT}" \
+            --target-slot production
 
+      - name: Smoke test production /health
+        if: ${{ github.event_name == 'push' || inputs.promote }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_URL="${AZURE_WEBAPP_URL%/}"
           HEALTH_URL="${BASE_URL}/health"
-          echo "Checking: ${HEALTH_URL}"
 
-          # The container needs ~2.5 min after deploy for cert init + Gunicorn startup.
-          # 40 attempts × 10s = 400s (~6.5 min) gives plenty of headroom.
           for i in $(seq 1 40); do
             HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' "${HEALTH_URL}" || echo "000")
             if [[ "${HTTP_CODE}" == "200" ]]; then
-              echo "Health check passed (HTTP ${HTTP_CODE})"
+              echo "Production health check passed"
               exit 0
             fi
-            echo "Attempt ${i}/40 — HTTP ${HTTP_CODE}; retrying in 10s..."
+            echo "Production attempt ${i}/40 -> HTTP ${HTTP_CODE}"
             sleep 10
           done
 
-          echo "Smoke test failed after 40 attempts (~400s)"
+          echo "Production health check failed"
           exit 1
+
+      - name: Rollback swap if production health fails
+        if: ${{ failure() && steps.slot_swap.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          az webapp deployment slot swap \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --slot "${DEPLOY_SLOT}" \
+            --target-slot production
+
+          echo "Rollback swap executed"
