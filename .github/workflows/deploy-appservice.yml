@@ -148,19 +148,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          PROD_DATABASE_URL=$(az webapp config appsettings list \
-            --resource-group "${AZURE_RESOURCE_GROUP}" \
-            --name "${AZURE_WEBAPP_NAME}" \
-            --query "[?name=='DATABASE_URL'].value | [0]" \
-            -o tsv)
-
-          if [[ -z "${PROD_DATABASE_URL}" || "${PROD_DATABASE_URL}" == "null" ]]; then
-            echo "ERROR: Production app setting DATABASE_URL is empty or missing"
-            exit 1
-          fi
-
           PROD_STARTUP_CMD='cd /home/site/wwwroot/backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
-          SLOT_STARTUP_CMD='cd /home/site/wwwroot/backend && export PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages && python -m alembic -c alembic.ini upgrade head && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
+          SLOT_STARTUP_CMD='cd /home/site/wwwroot/backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
 
           az webapp config appsettings set \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
@@ -177,8 +166,7 @@ jobs:
             --settings \
               SCM_DO_BUILD_DURING_DEPLOYMENT=false \
               WEBSITE_RUN_FROM_PACKAGE=0 \
-              PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages \
-              DATABASE_URL="${PROD_DATABASE_URL}"
+              PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages
 
           az webapp config set \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
