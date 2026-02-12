@@ -34,7 +34,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.11"
 
       - name: Build Python dependencies (prebuilt)
         shell: bash
@@ -46,15 +46,15 @@ jobs:
           # If we build native deps (e.g., cryptography) on the runner, we can ship binaries that
           # fail at runtime with errors like: "GLIBC_2.xx not found".
           #
-          # To avoid this, download and install ONLY prebuilt manylinux wheels for CPython 3.9.
+          # To avoid this, download and install ONLY prebuilt manylinux wheels for CPython 3.11.
           rm -rf .wheelhouse
           python -m pip download \
             --dest .wheelhouse \
             --only-binary=:all: \
             --platform manylinux2014_x86_64 \
-            --python-version 39 \
+            --python-version 311 \
             --implementation cp \
-            --abi cp39 \
+            --abi cp311 \
             -r backend/requirements.txt
 
           python -m pip install \
@@ -118,6 +118,16 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID || secrets.AZUREAPPSERVICE_CLIENTID_426D9D8CF5E44278B95832DF7A8B952C }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID || secrets.AZUREAPPSERVICE_TENANTID_86103DA9D503455CBA1DD528317C4086 }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID || secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_2DB64B82AB4142F0BF1A20F53F83988A }}
+
+      - name: Ensure App Service runtime is Python 3.11
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          az webapp config set \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --linux-fx-version "PYTHON|3.11"
 
       - name: Ensure site is started (Kudu needs a running site)
         shell: bash
