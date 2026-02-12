@@ -218,15 +218,29 @@ jobs:
         run: |
           set -euo pipefail
 
-          DATABASE_URL=$(az webapp config appsettings list \
+          RAW_DATABASE_URL=$(az webapp config appsettings list \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --name "${AZURE_WEBAPP_NAME}" \
             --slot "${DEPLOY_SLOT}" \
             --query "[?name=='DATABASE_URL'].value | [0]" \
             -o tsv)
 
-          if [[ -z "${DATABASE_URL}" || "${DATABASE_URL}" == "null" ]]; then
+          if [[ -z "${RAW_DATABASE_URL}" || "${RAW_DATABASE_URL}" == "null" ]]; then
             echo "DATABASE_URL app setting is missing in slot ${DEPLOY_SLOT}"
+            exit 1
+          fi
+
+          if [[ "${RAW_DATABASE_URL}" =~ ^@Microsoft.KeyVault\(SecretUri=(.*)\)$ ]]; then
+            SECRET_URI="${BASH_REMATCH[1]}"
+            DATABASE_URL=$(az keyvault secret show --id "${SECRET_URI}" --query value -o tsv)
+          else
+            DATABASE_URL="${RAW_DATABASE_URL}"
+          fi
+
+          DATABASE_URL="$(printf '%s' "${DATABASE_URL}" | tr -d '\r')"
+
+          if [[ -z "${DATABASE_URL}" || "${DATABASE_URL}" == "null" ]]; then
+            echo "Resolved DATABASE_URL is empty"
             exit 1
           fi
 
