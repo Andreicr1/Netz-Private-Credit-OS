@@ -214,6 +214,29 @@ jobs:
               || true
           done
 
+      - name: Run Alembic migration on staging slot
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SLOT_SCM_HOST="${AZURE_WEBAPP_NAME}-${DEPLOY_SLOT}.scm.azurewebsites.net"
+          KUDU_URL="https://${SLOT_SCM_HOST}"
+          TOKEN=$(az account get-access-token --query accessToken -o tsv)
+
+          payload='{"command":"bash -lc \"cd /home/site/wwwroot/backend && /bin/bash scripts/run_alembic_migration.sh\"","dir":"/home/site/wwwroot"}'
+
+          response=$(curl -sf -X POST \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "${payload}" \
+            "${KUDU_URL}/api/command")
+
+          echo "${response}"
+          echo "${response}" | grep -q '"ExitCode"[[:space:]]*:[[:space:]]*0' || {
+            echo "ERROR: Alembic migration failed in staging slot"
+            exit 1
+          }
+
       - name: Smoke test staging slot /health
         shell: bash
         run: |
