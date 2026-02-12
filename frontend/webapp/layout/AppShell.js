@@ -19,6 +19,43 @@ function matchSignatureDetail(pathname) {
   return m ? { transferId: decodeURIComponent(m[1]) } : null;
 }
 
+function isStaticWebAppsHost() {
+  try {
+    const host = (window.location && window.location.hostname) || "";
+    return host.includes("azurestaticapps.net");
+  } catch (e) {
+    return false;
+  }
+}
+
+function getClientPrincipal(payload) {
+  if (Array.isArray(payload)) {
+    if (payload.length === 0) return null;
+    return payload[0] && payload[0].clientPrincipal ? payload[0].clientPrincipal : null;
+  }
+  return payload && payload.clientPrincipal ? payload.clientPrincipal : null;
+}
+
+async function ensureAuthenticated() {
+  if (!isStaticWebAppsHost()) {
+    return true;
+  }
+
+  try {
+    const res = await fetch("/.auth/me", { method: "GET", credentials: "include" });
+    const payload = res.ok ? await res.json() : null;
+    const principal = getClientPrincipal(payload);
+    if (principal) {
+      return true;
+    }
+  } catch (e) {
+  }
+
+  const currentPath = `${window.location.pathname || "/"}${window.location.search || ""}${window.location.hash || ""}`;
+  window.location.replace(`/.auth/login/aad?post_login_redirect_uri=${encodeURIComponent(currentPath)}`);
+  return false;
+}
+
 export class AppShell {
   constructor() {
     this.el = document.createElement("div");
@@ -76,7 +113,11 @@ export class AppShell {
     window.addEventListener("popstate", () => this._renderCurrentRoute());
   }
 
-  start() {
+  async start() {
+    const ok = await ensureAuthenticated();
+    if (!ok) {
+      return;
+    }
     this._renderCurrentRoute();
   }
 
