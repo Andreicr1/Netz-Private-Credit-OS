@@ -1,18 +1,15 @@
 <mvc:View
   controllerName="netz.fund.os.App"
   displayBlock="true"
+  class="netzAppRoot"
   xmlns:mvc="sap.ui.core.mvc"
   xmlns:core="sap.ui.core"
   xmlns="sap.m"
   xmlns:f="sap.f"
 >
-  <VBox height="100%" width="100%">
-    <f:ShellBar id="shellBar" title="Netz Fund OS" showMenuButton="false" />
+  <f:ShellBar id="shellBar" title="Netz Fund OS" showMenuButton="false" />
 
-    <SplitContainer id="split" mode="ShowHideMode">
-      <layoutData>
-        <FlexItemData growFactor="1" />
-      </layoutData>
+  <SplitApp id="split" mode="ShowHideMode" class="netzAppSplit">
       <masterPages>
         <Page title="Navigation" showHeader="true">
           <List id="navList" mode="SingleSelectMaster" selectionChange="onNavSelectionChange">
@@ -58,7 +55,6 @@
       <detailPages>
         <NavContainer id="detailNav" />
       </detailPages>
-    </SplitContainer>
-  </VBox>
+    </SplitApp>
 </mvc:View>
 
