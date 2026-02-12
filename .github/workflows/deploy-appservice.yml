@@ -176,6 +176,65 @@ jobs:
               || echo "  not found or already gone — OK."
           done
 
+      - name: Run Alembic migrations (Kudu command)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          KUDU_URL="https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net"
+          TOKEN=$(az account get-access-token --query accessToken -o tsv)
+
+          CMD='cd /home/site/wwwroot/backend && export PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages && python3 -m alembic -c alembic.ini upgrade head'
+          RESP=$(curl -sf -X POST \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "$(printf '{\"command\":\"%s\",\"dir\":\"/home/site/wwwroot\"}' "${CMD}")" \
+            "${KUDU_URL}/api/command")
+
+          echo "${RESP}"
+
+          MIGRATION_RESP="${RESP}" python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          raw = os.environ.get("MIGRATION_RESP", "")
+          if not raw:
+              print("Missing migration response payload")
+              sys.exit(1)
+
+          try:
+              data = json.loads(raw)
+          except Exception as exc:
+              print(f"Failed to parse migration response JSON: {exc}")
+              print(raw)
+              sys.exit(1)
+
+          output = data.get("Output", "")
+          error = data.get("Error", "")
+          exit_code = data.get("ExitCode")
+            try:
+              normalized_exit_code = int(exit_code) if exit_code is not None else 0
+            except Exception:
+              print(f"Unexpected ExitCode format: {exit_code}")
+              sys.exit(1)
+
+          if output:
+              print(output)
+          if error:
+              print(error)
+
+            if normalized_exit_code != 0:
+              print(f"Alembic migration failed with ExitCode={exit_code}")
+              sys.exit(1)
+
+          if isinstance(error, str) and error.strip():
+              print("Alembic migration reported stderr output; failing deployment")
+              sys.exit(1)
+
+          print("Alembic migration completed successfully")
+          PY
+
       - name: Configure App Service build + startup (post-deploy)
         shell: bash
         env:
@@ -196,11 +255,10 @@ jobs:
               WEBSITE_RUN_FROM_PACKAGE=0 \
               PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages
 
-          # Startup command: run schema migrations first, then start gunicorn.
-          # NOTE: use `python3 -m alembic` because the `alembic` entrypoint binary
-          # may not be on PATH when dependencies are installed under .python_packages.
+          # Startup command: start only Gunicorn. Migrations run in a dedicated step
+          # before startup config to avoid startup probe timeout.
           # $PORT is expanded at runtime by the container.
-          STARTUP_CMD='cd /home/site/wwwroot/backend && export PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages && python3 -m alembic -c alembic.ini upgrade head && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
+          STARTUP_CMD='cd /home/site/wwwroot/backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
           az webapp config set \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --name "${AZURE_WEBAPP_NAME}" \
