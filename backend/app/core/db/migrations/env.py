@@ -10,6 +10,7 @@ from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+from sqlalchemy.engine.url import make_url
 
 # Ensure `app.*` is importable when running alembic from `backend/`.
 sys.path.append(os.path.abspath(os.getcwd()))
@@ -91,10 +92,39 @@ def _resolve_keyvault_reference(raw_value: str) -> str:
 
 
 def get_url() -> str:
-    url = settings.database_url or os.getenv("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
-    if isinstance(url, str) and url.startswith("@Microsoft.KeyVault("):
-        return _resolve_keyvault_reference(url)
-    return url
+    candidates: list[str] = []
+
+    if settings.database_url:
+        candidates.append(settings.database_url)
+
+    env_database_url = os.getenv("DATABASE_URL")
+    if env_database_url and env_database_url not in candidates:
+        candidates.append(env_database_url)
+
+    ini_url = config.get_main_option("sqlalchemy.url")
+    if ini_url and ini_url not in candidates:
+        candidates.append(ini_url)
+
+    for raw in candidates:
+        candidate = raw.strip()
+
+        if "@Microsoft.KeyVault(" in candidate:
+            try:
+                candidate = _resolve_keyvault_reference(candidate)
+            except Exception as exc:
+                print(f"[alembic] keyvault resolve failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+                continue
+
+        try:
+            make_url(candidate)
+            return candidate
+        except Exception:
+            print(
+                f"[alembic] skipping unparseable database url candidate: prefix={candidate[:48]!r}",
+                file=sys.stderr,
+            )
+
+    raise RuntimeError("No valid SQLAlchemy database URL candidate for Alembic")
 
 
 def run_migrations_offline() -> None:
