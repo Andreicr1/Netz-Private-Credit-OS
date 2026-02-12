@@ -77,13 +77,27 @@ def _get_forwarded_aad_token(request: Request) -> str | None:
 
 
 def _decode_swa_client_principal(request: Request) -> tuple[str, str | None, dict[str, Any]] | None:
+    principal_id = request.headers.get("X-MS-CLIENT-PRINCIPAL-ID")
+    principal_name = request.headers.get("X-MS-CLIENT-PRINCIPAL-NAME")
+    if principal_id:
+        actor_id = str(principal_id)
+        email = str(principal_name) if principal_name else None
+        claims: dict[str, Any] = {
+            "oid": actor_id,
+            "sub": actor_id,
+            "email": email,
+            "preferred_username": email,
+            "roles": [],
+        }
+        return actor_id, email, claims
+
     raw = request.headers.get("X-MS-CLIENT-PRINCIPAL")
     if not raw:
         return None
 
     try:
         normalized = raw + ("=" * (-len(raw) % 4))
-        decoded = base64.b64decode(normalized).decode("utf-8")
+        decoded = base64.urlsafe_b64decode(normalized).decode("utf-8")
         payload = json.loads(decoded)
     except Exception:
         return None
