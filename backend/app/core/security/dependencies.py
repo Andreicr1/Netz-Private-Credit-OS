@@ -14,7 +14,7 @@ def get_actor(request: Request) -> Actor:
     try:
         actor = actor_from_request(request)
     except NotImplementedError as e:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
     except Exception:
