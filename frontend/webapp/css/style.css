@@ -1,12 +1,81 @@
-.netzAppRoot {
-  display: flex !important;
-  flex-direction: column !important;
-  height: 100vh !important;
-  width: 100% !important;
-  overflow: hidden !important;
+html,
+body,
+#app {
+  height: 100%;
 }
 
-.netzAppSplit {
-  flex: 1 1 0 !important;
-  min-height: 0 !important;
+body {
+  margin: 0;
+  background: var(--sapBackgroundColor);
+  color: var(--sapTextColor);
+}
+
+.netz-app-shell {
+  height: 100%;
+  width: 100%;
+}
+
+.netz-nav-layout {
+  height: 100%;
+}
+
+.netz-shell-logo {
+  width: 1.75rem;
+  height: 1.75rem;
+  object-fit: contain;
+}
+
+.netz-side-nav {
+  height: 100%;
+}
+
+.netz-content-host {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.netz-page-content {
+  padding: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.netz-action-bar {
+  width: 100%;
+}
+
+.netz-action-btn {
+  margin-inline-start: 0.5rem;
+}
+
+.netz-icon-btn {
+  min-width: 2rem;
+}
+
+.netz-page-content ui5-table,
+.netz-dialog-content ui5-table {
+  width: 100%;
+}
+
+.netz-form-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.netz-form-grid-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.netz-dialog-content {
+  padding: 1rem;
+}
+
+.netz-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.5rem;
 }
