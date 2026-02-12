@@ -179,23 +179,22 @@ jobs:
             --slot "${DEPLOY_SLOT}" \
             --startup-file "${SLOT_STARTUP_CMD}"
 
-      - name: Deploy package to staging slot (Kudu zipdeploy)
+      - name: Deploy package to staging slot (clean deploy)
         shell: bash
         run: |
           set -euo pipefail
 
-          SLOT_SCM_HOST="${AZURE_WEBAPP_NAME}-${DEPLOY_SLOT}.scm.azurewebsites.net"
-          KUDU_URL="https://${SLOT_SCM_HOST}"
-          TOKEN=$(az account get-access-token --query accessToken -o tsv)
+          az webapp deploy \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --slot "${DEPLOY_SLOT}" \
+            --src-path deploy.zip \
+            --type zip \
+            --clean true \
+            --restart true
 
-          curl -sf -X POST \
-            -H "Authorization: Bearer ${TOKEN}" \
-            -H "Content-Type: application/zip" \
-            --data-binary @deploy.zip \
-            "${KUDU_URL}/api/zipdeploy?isAsync=true"
-
-          echo "Waiting 180s for slot zip deploy extraction..."
-          sleep 180
+          echo "Waiting 120s for slot restart and extraction..."
+          sleep 120
 
       - name: Purge stale Oryx artifacts in staging slot
         shell: bash
