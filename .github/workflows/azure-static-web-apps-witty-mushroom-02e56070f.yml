@@ -19,7 +19,7 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
           action: "upload"
 
-          # UI5 build já gera dist/
+          # UI5 build already produces dist/
           app_location: "frontend"
           output_location: "dist"
 
