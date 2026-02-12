@@ -144,24 +144,23 @@ jobs:
             --name "${AZURE_WEBAPP_NAME}" \
             --startup-file "${SAFE_STARTUP}"
 
-      - name: Deploy (az webapp deploy)
+      - name: Deploy (Kudu zipdeploy async)
         shell: bash
         run: |
           set -euo pipefail
 
-          # Deploy with --async so the command returns as soon as the zip is uploaded
-          # and Kudu starts extracting it.  The built-in sync polling of `az webapp deploy`
-          # can falsely report "Site failed to start" even when the container is healthy
-          # (startup probe takes ~150s; the deploy status API sometimes doesn't track the
-          # successful restart).  We verify site health ourselves in the next step.
-          az webapp deploy \
-            --resource-group "${AZURE_RESOURCE_GROUP}" \
-            --name "${AZURE_WEBAPP_NAME}" \
-            --type zip \
-            --src-path deploy.zip \
-            --clean true \
-            --async true \
-            --track-status false
+          KUDU_URL="https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net"
+          TOKEN=$(az account get-access-token --query accessToken -o tsv)
+
+          # Upload zip package directly to Kudu and trigger async deployment.
+          # We intentionally avoid az webapp deploy polling because it can block
+          # for long periods on startup status even when later steps do explicit
+          # health verification.
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/zip" \
+            --data-binary @deploy.zip \
+            "${KUDU_URL}/api/zipdeploy?isAsync=true"
 
           # Give Kudu time to rsync the zip contents to wwwroot (takes ~2-3 min for 6k+ files)
           echo "Waiting 180s for Kudu to extract the zip..."
