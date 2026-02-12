@@ -1,5 +1,52 @@
 import { getDevActorHeaderValue } from "./env.js";
 
+let cachedPrincipalHeaderPromise = null;
+
+function isStaticWebAppsHost() {
+  try {
+    const host = (window.location && window.location.hostname) || "";
+    return host.includes("azurestaticapps.net");
+  } catch {
+    return false;
+  }
+}
+
+function getClientPrincipal(payload) {
+  if (Array.isArray(payload)) {
+    if (payload.length === 0) return null;
+    return payload[0] && payload[0].clientPrincipal ? payload[0].clientPrincipal : null;
+  }
+  return payload && payload.clientPrincipal ? payload.clientPrincipal : null;
+}
+
+function encodeBase64Utf8(value) {
+  return btoa(unescape(encodeURIComponent(value)));
+}
+
+async function getSwaClientPrincipalHeader() {
+  if (!isStaticWebAppsHost()) {
+    return null;
+  }
+
+  if (!cachedPrincipalHeaderPromise) {
+    cachedPrincipalHeaderPromise = fetch("/.auth/me", { method: "GET", credentials: "include" })
+      .then(async (res) => {
+        if (!res.ok) {
+          return null;
+        }
+        const payload = await res.json();
+        const principal = getClientPrincipal(payload);
+        if (!principal) {
+          return null;
+        }
+        return encodeBase64Utf8(JSON.stringify(principal));
+      })
+      .catch(() => null);
+  }
+
+  return cachedPrincipalHeaderPromise;
+}
+
 export function buildHttpError(res, url, detailText) {
   const err = new Error(`HTTP ${res.status} ${res.statusText} for ${url}${detailText ? ` — ${detailText}` : ""}`);
   err.status = res.status;
@@ -10,11 +57,13 @@ export function buildHttpError(res, url, detailText) {
 
 export async function fetchJson(url, options = {}) {
   const devActor = getDevActorHeaderValue();
+  const principalHeader = await getSwaClientPrincipalHeader();
   const res = await fetch(url, {
     ...options,
     headers: {
       Accept: "application/json",
       ...(devActor ? { "X-DEV-ACTOR": devActor } : {}),
+      ...(principalHeader ? { "X-MS-CLIENT-PRINCIPAL": principalHeader } : {}),
       ...(options.headers || {}),
     },
   });
@@ -47,11 +96,13 @@ export function postJson(url, payload) {
 
 export async function postForm(url, formData) {
   const devActor = getDevActorHeaderValue();
+  const principalHeader = await getSwaClientPrincipalHeader();
   const res = await fetch(url, {
     method: "POST",
     body: formData,
     headers: {
       ...(devActor ? { "X-DEV-ACTOR": devActor } : {}),
+      ...(principalHeader ? { "X-MS-CLIENT-PRINCIPAL": principalHeader } : {}),
     },
   });
   const text = await res.text();
