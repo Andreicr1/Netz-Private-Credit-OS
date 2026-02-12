@@ -10,6 +10,9 @@
     <f:ShellBar id="shellBar" title="Netz Fund OS" showMenuButton="false" />
 
     <SplitContainer id="split" mode="ShowHideMode">
+      <layoutData>
+        <FlexItemData growFactor="1" />
+      </layoutData>
       <masterPages>
         <Page title="Navigation" showHeader="true">
           <List id="navList" mode="SingleSelectMaster" selectionChange="onNavSelectionChange">
