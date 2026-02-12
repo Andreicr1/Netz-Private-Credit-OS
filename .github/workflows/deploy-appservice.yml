@@ -213,58 +213,27 @@ jobs:
               || true
           done
 
-      - name: Run Alembic migration on staging slot (Kudu command)
+      - name: Run Alembic migration for staging slot (runner)
         shell: bash
         run: |
           set -euo pipefail
 
-          SLOT_SCM_HOST="${AZURE_WEBAPP_NAME}-${DEPLOY_SLOT}.scm.azurewebsites.net"
-          KUDU_URL="https://${SLOT_SCM_HOST}"
-          TOKEN=$(az account get-access-token --query accessToken -o tsv)
+          DATABASE_URL=$(az webapp config appsettings list \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --slot "${DEPLOY_SLOT}" \
+            --query "[?name=='DATABASE_URL'].value | [0]" \
+            -o tsv)
 
-          CMD='/bin/bash /home/site/wwwroot/backend/scripts/run_alembic_migration.sh'
-          RESP=$(curl -sf -X POST \
-            -H "Authorization: Bearer ${TOKEN}" \
-            -H "Content-Type: application/json" \
-            --data "$(printf '{\"command\":\"%s\",\"dir\":\"/home/site/wwwroot\"}' "${CMD}")" \
-            "${KUDU_URL}/api/command")
+          if [[ -z "${DATABASE_URL}" || "${DATABASE_URL}" == "null" ]]; then
+            echo "DATABASE_URL app setting is missing in slot ${DEPLOY_SLOT}"
+            exit 1
+          fi
 
-          MIGRATION_RESP="${RESP}" python3 - <<'PY'
-          import json
-          import os
-          import sys
+          export DATABASE_URL
+          export PYTHONPATH="${GITHUB_WORKSPACE}/backend:${GITHUB_WORKSPACE}/.python_packages/lib/site-packages"
 
-          raw = os.environ.get("MIGRATION_RESP", "")
-          if not raw:
-              print("Missing migration response payload")
-              sys.exit(1)
-
-          data = json.loads(raw)
-          output = data.get("Output", "")
-          error = data.get("Error", "")
-          exit_code = data.get("ExitCode")
-
-          try:
-              normalized_exit_code = int(exit_code) if exit_code is not None else 0
-          except Exception:
-              print(f"Unexpected ExitCode format: {exit_code}")
-              sys.exit(1)
-
-          if output:
-              print(output)
-          if error:
-              print(error)
-
-          if normalized_exit_code != 0:
-              print(f"Alembic migration failed with ExitCode={exit_code}")
-              sys.exit(1)
-
-          if isinstance(error, str) and error.strip():
-              print("Alembic migration reported stderr output; failing deployment")
-              sys.exit(1)
-
-          print("Alembic migration completed successfully")
-          PY
+          python -m alembic -c backend/alembic.ini upgrade head
 
       - name: Smoke test staging slot /health
         shell: bash
