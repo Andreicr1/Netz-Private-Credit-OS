@@ -63,6 +63,18 @@ def _get_bearer_token(request: Request) -> str | None:
     return auth.split(" ", 1)[1].strip()
 
 
+def _get_forwarded_aad_token(request: Request) -> str | None:
+    token = request.headers.get("X-MS-TOKEN-AAD-ACCESS-TOKEN")
+    if token and token.strip():
+        return token.strip()
+
+    alt = request.headers.get("X-ZUMO-AUTH")
+    if alt and alt.strip():
+        return alt.strip()
+
+    return None
+
+
 def _verify_entra_jwt(token: str) -> dict[str, Any]:
     """
     Production path: verify JWT signature with JWKS.
@@ -145,7 +157,7 @@ def actor_from_request(request: Request) -> Actor:
         if raw:
             return _parse_dev_actor_header(raw)
 
-    token = _get_bearer_token(request)
+    token = _get_bearer_token(request) or _get_forwarded_aad_token(request)
     if not token:
         if settings.env == Env.prod:
             raise PermissionError("Missing bearer token")
