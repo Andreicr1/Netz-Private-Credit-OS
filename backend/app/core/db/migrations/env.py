@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import os
 import sys
+import json
+import re
+import urllib.parse
+import urllib.request
 from logging.config import fileConfig
 
 from alembic import context
@@ -48,8 +52,49 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def _resolve_keyvault_reference(raw_value: str) -> str:
+    match = re.search(r"SecretUri=([^\)]+)", raw_value)
+    if not match:
+        raise RuntimeError("Invalid Key Vault reference format in DATABASE_URL")
+
+    secret_uri = match.group(1)
+
+    identity_endpoint = os.getenv("IDENTITY_ENDPOINT")
+    identity_header = os.getenv("IDENTITY_HEADER")
+
+    if identity_endpoint and identity_header:
+        query = urllib.parse.urlencode({"resource": "https://vault.azure.net", "api-version": "2019-08-01"})
+        token_url = f"{identity_endpoint}?{query}"
+        token_headers = {"X-IDENTITY-HEADER": identity_header, "Metadata": "true"}
+    else:
+        query = urllib.parse.urlencode({"resource": "https://vault.azure.net", "api-version": "2018-02-01"})
+        token_url = f"http://169.254.169.254/metadata/identity/oauth2/token?{query}"
+        token_headers = {"Metadata": "true"}
+
+    token_req = urllib.request.Request(token_url, headers=token_headers)
+    with urllib.request.urlopen(token_req, timeout=10) as resp:
+        token_payload = json.loads(resp.read().decode("utf-8"))
+
+    access_token = token_payload.get("access_token")
+    if not access_token:
+        raise RuntimeError("Failed to obtain managed identity access token")
+
+    secret_req = urllib.request.Request(secret_uri, headers={"Authorization": f"Bearer {access_token}"})
+    with urllib.request.urlopen(secret_req, timeout=10) as resp:
+        secret_payload = json.loads(resp.read().decode("utf-8"))
+
+    secret_value = secret_payload.get("value")
+    if not secret_value:
+        raise RuntimeError("Failed to resolve DATABASE_URL from Key Vault secret")
+
+    return secret_value
+
+
 def get_url() -> str:
-    return settings.database_url or os.getenv("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
+    url = settings.database_url or os.getenv("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
+    if isinstance(url, str) and url.startswith("@Microsoft.KeyVault("):
+        return _resolve_keyvault_reference(url)
+    return url
 
 
 def run_migrations_offline() -> None:
