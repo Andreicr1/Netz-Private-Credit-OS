@@ -148,7 +148,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          STARTUP_CMD='cd /home/site/wwwroot/backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
+          PROD_STARTUP_CMD='cd /home/site/wwwroot/backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
+          SLOT_STARTUP_CMD='cd /home/site/wwwroot/backend && export PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages && python -m alembic -c alembic.ini upgrade head && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
 
           az webapp config appsettings set \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
@@ -170,13 +171,13 @@ jobs:
           az webapp config set \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --name "${AZURE_WEBAPP_NAME}" \
-            --startup-file "${STARTUP_CMD}"
+            --startup-file "${PROD_STARTUP_CMD}"
 
           az webapp config set \
             --resource-group "${AZURE_RESOURCE_GROUP}" \
             --name "${AZURE_WEBAPP_NAME}" \
             --slot "${DEPLOY_SLOT}" \
-            --startup-file "${STARTUP_CMD}"
+            --startup-file "${SLOT_STARTUP_CMD}"
 
       - name: Deploy package to staging slot (Kudu zipdeploy)
         shell: bash
@@ -212,42 +213,6 @@ jobs:
               "${KUDU_URL}/api/vfs/site/wwwroot/${artifact}" \
               || true
           done
-
-      - name: Run Alembic migration for staging slot (runner)
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          RAW_DATABASE_URL=$(az webapp config appsettings list \
-            --resource-group "${AZURE_RESOURCE_GROUP}" \
-            --name "${AZURE_WEBAPP_NAME}" \
-            --slot "${DEPLOY_SLOT}" \
-            --query "[?name=='DATABASE_URL'].value | [0]" \
-            -o tsv)
-
-          if [[ -z "${RAW_DATABASE_URL}" || "${RAW_DATABASE_URL}" == "null" ]]; then
-            echo "DATABASE_URL app setting is missing in slot ${DEPLOY_SLOT}"
-            exit 1
-          fi
-
-          if [[ "${RAW_DATABASE_URL}" =~ ^@Microsoft.KeyVault\(SecretUri=(.*)\)$ ]]; then
-            SECRET_URI="${BASH_REMATCH[1]}"
-            DATABASE_URL=$(az keyvault secret show --id "${SECRET_URI}" --query value -o tsv)
-          else
-            DATABASE_URL="${RAW_DATABASE_URL}"
-          fi
-
-          DATABASE_URL="$(printf '%s' "${DATABASE_URL}" | tr -d '\r')"
-
-          if [[ -z "${DATABASE_URL}" || "${DATABASE_URL}" == "null" ]]; then
-            echo "Resolved DATABASE_URL is empty"
-            exit 1
-          fi
-
-          export DATABASE_URL
-          export PYTHONPATH="${GITHUB_WORKSPACE}/backend:${GITHUB_WORKSPACE}/.python_packages/lib/site-packages"
-          cd backend
-          python -m alembic -c alembic.ini upgrade head
 
       - name: Smoke test staging slot /health
         shell: bash
