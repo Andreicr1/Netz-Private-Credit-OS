@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import uuid
 from dataclasses import dataclass
@@ -73,6 +74,62 @@ def _get_forwarded_aad_token(request: Request) -> str | None:
         return alt.strip()
 
     return None
+
+
+def _decode_swa_client_principal(request: Request) -> tuple[str, str | None, dict[str, Any]] | None:
+    raw = request.headers.get("X-MS-CLIENT-PRINCIPAL")
+    if not raw:
+        return None
+
+    try:
+        normalized = raw + ("=" * (-len(raw) % 4))
+        decoded = base64.b64decode(normalized).decode("utf-8")
+        payload = json.loads(decoded)
+    except Exception:
+        return None
+
+    actor_id = str(payload.get("userId") or payload.get("identityProvider") or "unknown")
+    email = payload.get("userDetails")
+
+    claims: dict[str, Any] = {
+        "sub": actor_id,
+        "email": email,
+        "preferred_username": email,
+        "roles": [],
+    }
+
+    for role_value in payload.get("userRoles") or []:
+        if role_value in {"authenticated", "anonymous"}:
+            continue
+        claims["roles"].append(str(role_value))
+
+    for claim in payload.get("claims") or []:
+        typ = str(claim.get("typ") or "")
+        val = claim.get("val")
+        if not typ or val is None:
+            continue
+        if typ in {"http://schemas.microsoft.com/identity/claims/objectidentifier", "oid"}:
+            claims["oid"] = str(val)
+            actor_id = str(val)
+            claims["sub"] = actor_id
+        elif typ in {
+            "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+            "email",
+            "preferred_username",
+            "upn",
+        }:
+            email = str(val)
+            claims["email"] = email
+            claims["preferred_username"] = email
+            claims["upn"] = email
+        elif typ in {
+            "http://schemas.microsoft.com/ws/2008/06/identity/claims/role",
+            "roles",
+            "role",
+        }:
+            claims["roles"].append(str(val))
+
+    return actor_id, (str(email) if email else None), claims
 
 
 def _verify_entra_jwt(token: str) -> dict[str, Any]:
@@ -156,6 +213,23 @@ def actor_from_request(request: Request) -> Actor:
         raw = request.headers.get(settings.dev_actor_header)
         if raw:
             return _parse_dev_actor_header(raw)
+
+    principal = _decode_swa_client_principal(request)
+    if principal is not None:
+        actor_id, email, claims = principal
+        claim_roles = _extract_claim_roles(claims)
+        db_roles, db_funds = _load_user_context(actor_id=actor_id, email=email)
+        effective_roles = claim_roles.union(db_roles)
+        if not effective_roles:
+            effective_roles = {Role.INVESTOR}
+
+        is_admin = Role.ADMIN in effective_roles
+        return Actor(
+            actor_id=actor_id,
+            roles=tuple(sorted(effective_roles, key=lambda value: value.value)),
+            fund_ids=tuple(sorted(db_funds, key=str)),
+            is_admin=is_admin,
+        )
 
     token = _get_bearer_token(request) or _get_forwarded_aad_token(request)
     if not token:
