@@ -58,10 +58,12 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestIdMiddleware)
 
     @app.get("/health", tags=["admin"])
+    @app.get("/api/health", tags=["admin"])
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
     @app.get("/health/azure", tags=["admin"])
+    @app.get("/api/health/azure", tags=["admin"])
     def health_azure() -> dict[str, str]:
         storage = health_check_storage()
         search = health_check_search()

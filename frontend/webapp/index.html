@@ -1,30 +1,14 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Netz Fund OS</title>
-
-    <!-- ✅ UI5 Framework via CDN (produção correta para Azure SWA) -->
-    <script
-      id="sap-ui-bootstrap"
-      src="https://openui5.hana.ondemand.com/1.96.0/resources/sap-ui-core.js"
-      data-sap-ui-theme="sap_fiori_3"
-      data-sap-ui-libs="sap.m,sap.f,sap.ui.core,sap.ui.layout,sap.ui.unified,sap.uxap"
-      data-sap-ui-resourceroots='{"netz.fund.os": "./"}'
-      data-sap-ui-async="true"
-      data-sap-ui-compatVersion="edge"
-      data-sap-ui-oninit="module:sap/ui/core/ComponentSupport"
-    ></script>
+    <meta name="theme-color" content="#ffffff" />
   </head>
 
-  <body class="sapUiBody" id="content">
-    <div
-      data-sap-ui-component
-      data-name="netz.fund.os"
-      data-id="container"
-      data-settings='{"id": "netzFundOs"}'
-      style="height: 100%"
-    ></div>
+  <body>
+    <div id="app" style="height: 100vh"></div>
+    <script type="module" src="/main.js"></script>
   </body>
 </html>

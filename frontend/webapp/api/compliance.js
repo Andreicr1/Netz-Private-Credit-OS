@@ -1,3 +1,43 @@
+import { getApiBaseUrl } from "../services/env.js";
+import { fetchJson, postJson } from "../services/http.js";
+
+export function me(fundId) {
+  const url = `${getApiBaseUrl()}/funds/${encodeURIComponent(fundId)}/compliance/me`;
+  return fetchJson(url, { method: "GET" });
+}
+
+export function listObligations(fundId, params = {}) {
+  let url = `${getApiBaseUrl()}/funds/${encodeURIComponent(fundId)}/compliance/obligations`;
+  if (params.view) {
+    url += `?view=${encodeURIComponent(params.view)}`;
+  }
+  return fetchJson(url, { method: "GET" });
+}
+
+export function getObligation(fundId, obligationId) {
+  const url = `${getApiBaseUrl()}/funds/${encodeURIComponent(fundId)}/compliance/obligations/${encodeURIComponent(obligationId)}`;
+  return fetchJson(url, { method: "GET" });
+}
+
+export function listEvidence(fundId, obligationId) {
+  const url = `${getApiBaseUrl()}/funds/${encodeURIComponent(fundId)}/compliance/obligations/${encodeURIComponent(obligationId)}/evidence`;
+  return fetchJson(url, { method: "GET" });
+}
+
+export function linkEvidence(fundId, obligationId, payload) {
+  const url = `${getApiBaseUrl()}/funds/${encodeURIComponent(fundId)}/compliance/obligations/${encodeURIComponent(obligationId)}/evidence/link`;
+  return postJson(url, payload);
+}
+
+export function markInProgress(fundId, obligationId) {
+  const url = `${getApiBaseUrl()}/funds/${encodeURIComponent(fundId)}/compliance/obligations/${encodeURIComponent(obligationId)}/workflow/mark-in-progress`;
+  return postJson(url, {});
+}
+
+export function closeObligation(fundId, obligationId) {
+  const url = `${getApiBaseUrl()}/funds/${encodeURIComponent(fundId)}/compliance/obligations/${encodeURIComponent(obligationId)}/workflow/close`;
+  return postJson(url, {});
+}
 sap.ui.define([
   "netz/fund/os/services/api"
 ], function (api) {
