@@ -12,8 +12,7 @@ from app.services.azure.blob_client import health_check_storage
 from app.services.azure.keyvault_client import health_check_keyvault
 from app.services.azure.search_client import health_check_search
 from app.services.azure.foundry_responses_client import health_check_foundry
-from app.core.db.session import get_db, get_engine
-from app.core.db.base import Base
+from app.core.db.session import get_db
 from app.core.db import models as _core_models
 from app.modules.actions import models as _actions_models
 from app.modules.ai import models as _ai_models
@@ -81,10 +80,6 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="Netz Private Credit OS - Backend", version="0.1.0")
     app.add_middleware(RequestIdMiddleware)
-
-    @app.on_event("startup")
-    def bootstrap_schema() -> None:
-        Base.metadata.create_all(bind=get_engine())
 
     @app.get("/health", tags=["admin"])
     @app.get("/api/health", tags=["admin"])
