@@ -12,7 +12,32 @@ from app.services.azure.blob_client import health_check_storage
 from app.services.azure.keyvault_client import health_check_keyvault
 from app.services.azure.search_client import health_check_search
 from app.services.azure.foundry_responses_client import health_check_foundry
-from app.core.db.session import get_db
+from app.core.db.session import get_db, get_engine
+from app.core.db.base import Base
+from app.core.db import models as _core_models
+from app.modules.actions import models as _actions_models
+from app.modules.ai import models as _ai_models
+from app.modules.compliance import models as _compliance_models
+from app.modules.deals import models as _deals_models
+from app.modules.documents import models as _documents_models
+from app.modules.portfolio import models as _portfolio_models
+from app.domain.portfolio.models import assets as _domain_assets
+from app.domain.portfolio.models import fund_investments as _domain_fi
+from app.domain.portfolio.models import obligations as _domain_obligations
+from app.domain.portfolio.models import alerts as _domain_alerts
+from app.domain.portfolio.models import actions as _domain_actions
+from app.domain.deals.models import deals as _domain_deals
+from app.domain.deals.models import qualification as _domain_deal_qual
+from app.domain.deals.models import ic_memos as _domain_ic_memos
+from app.domain.documents.models import evidence as _domain_evidence
+from app.domain.reporting.models import report_packs as _domain_report_packs
+from app.domain.reporting.models import report_sections as _domain_report_sections
+from app.domain.reporting.models import nav_snapshots as _domain_nav_snapshots
+from app.domain.reporting.models import asset_valuation_snapshots as _domain_asset_valuations
+from app.domain.reporting.models import investor_statements as _domain_investor_statements
+from app.domain.cash_management.models import cash as _domain_cash
+from app.domain.cash_management.models import bank_statements as _domain_bank_statements
+from app.domain.cash_management.models import reconciliation_matches as _domain_recon_matches
 from app.core.db.models import Fund, User, UserFundRole
 from app.core.security.dependencies import require_fund_access
 from app.shared.enums import Env, Role
@@ -56,6 +81,10 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="Netz Private Credit OS - Backend", version="0.1.0")
     app.add_middleware(RequestIdMiddleware)
+
+    @app.on_event("startup")
+    def bootstrap_schema() -> None:
+        Base.metadata.create_all(bind=get_engine())
 
     @app.get("/health", tags=["admin"])
     @app.get("/api/health", tags=["admin"])
