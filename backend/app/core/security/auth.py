@@ -74,12 +74,20 @@ def _verify_entra_jwt(token: str) -> dict[str, Any]:
     jwk_client = PyJWKClient(str(settings.oidc_jwks_url))
     signing_key = jwk_client.get_signing_key_from_jwt(token)
 
-    options = {"verify_aud": bool(settings.oidc_audience), "verify_iss": bool(settings.oidc_issuer)}
+    audiences = None
+    if settings.oidc_audience:
+        parsed = [value.strip() for value in str(settings.oidc_audience).replace(";", ",").split(",") if value.strip()]
+        if len(parsed) == 1:
+            audiences = parsed[0]
+        elif parsed:
+            audiences = parsed
+
+    options = {"verify_aud": bool(audiences), "verify_iss": bool(settings.oidc_issuer)}
     return jwt.decode(
         token,
         signing_key.key,
         algorithms=["RS256"],
-        audience=settings.oidc_audience,
+        audience=audiences,
         issuer=settings.oidc_issuer,
         options=options,
     )
