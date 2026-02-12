@@ -10,7 +10,6 @@ from sqlalchemy import engine_from_config, pool
 # Ensure `app.*` is importable when running alembic from `backend/`.
 sys.path.append(os.path.abspath(os.getcwd()))
 
-from app.core.config import settings  # noqa: E402
 from app.core.db.base import Base  # noqa: E402
 
 # Import all models so Base.metadata is complete.
@@ -49,7 +48,7 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    return os.getenv("DATABASE_URL", settings.database_url)
+    return os.getenv("DATABASE_URL") or config.get_main_option("sqlalchemy.url")
 
 
 def run_migrations_offline() -> None:
