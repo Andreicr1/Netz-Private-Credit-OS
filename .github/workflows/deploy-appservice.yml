@@ -133,6 +133,17 @@ jobs:
             sleep 60
           fi
 
+      - name: Pre-set safe startup command (before deploy)
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SAFE_STARTUP='cd /home/site/wwwroot/backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
+          az webapp config set \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --startup-file "${SAFE_STARTUP}"
+
       - name: Deploy (az webapp deploy)
         shell: bash
         run: |
@@ -149,7 +160,8 @@ jobs:
             --type zip \
             --src-path deploy.zip \
             --clean true \
-            --async true
+            --async true \
+            --track-status false
 
           # Give Kudu time to rsync the zip contents to wwwroot (takes ~2-3 min for 6k+ files)
           echo "Waiting 180s for Kudu to extract the zip..."
