@@ -232,8 +232,8 @@ jobs:
 
           export DATABASE_URL
           export PYTHONPATH="${GITHUB_WORKSPACE}/backend:${GITHUB_WORKSPACE}/.python_packages/lib/site-packages"
-
-          python -m alembic -c backend/alembic.ini upgrade head
+          cd backend
+          python -m alembic -c alembic.ini upgrade head
 
       - name: Smoke test staging slot /health
         shell: bash
