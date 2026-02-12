@@ -9,7 +9,7 @@
   <VBox height="100%" width="100%">
     <f:ShellBar id="shellBar" title="Netz Fund OS" showMenuButton="false" />
 
-    <SplitContainer id="split" mode="ShowHideMode" backgroundDesign="Solid">
+    <SplitContainer id="split" mode="ShowHideMode">
       <masterPages>
         <Page title="Navigation" showHeader="true">
           <List id="navList" mode="SingleSelectMaster" selectionChange="onNavSelectionChange">

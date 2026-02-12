@@ -44,7 +44,9 @@
       "i18n": {
         "type": "sap.ui.model.resource.ResourceModel",
         "settings": {
-          "bundleName": "netz.fund.os.i18n.i18n"
+          "bundleName": "netz.fund.os.i18n.i18n",
+          "supportedLocales": ["", "en", "pt", "pt_BR"],
+          "fallbackLocale": ""
         }
       },
       "device": {
