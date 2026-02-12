@@ -1,3 +1,5 @@
+import { getDevActorHeaderValue } from "./env.js";
+
 export function buildHttpError(res, url, detailText) {
   const err = new Error(`HTTP ${res.status} ${res.statusText} for ${url}${detailText ? ` — ${detailText}` : ""}`);
   err.status = res.status;
@@ -7,10 +9,12 @@ export function buildHttpError(res, url, detailText) {
 }
 
 export async function fetchJson(url, options = {}) {
+  const devActor = getDevActorHeaderValue();
   const res = await fetch(url, {
     ...options,
     headers: {
       Accept: "application/json",
+      ...(devActor ? { "X-DEV-ACTOR": devActor } : {}),
       ...(options.headers || {}),
     },
   });
@@ -42,7 +46,14 @@ export function postJson(url, payload) {
 }
 
 export async function postForm(url, formData) {
-  const res = await fetch(url, { method: "POST", body: formData });
+  const devActor = getDevActorHeaderValue();
+  const res = await fetch(url, {
+    method: "POST",
+    body: formData,
+    headers: {
+      ...(devActor ? { "X-DEV-ACTOR": devActor } : {}),
+    },
+  });
   const text = await res.text();
   let body = null;
   if (text) {
