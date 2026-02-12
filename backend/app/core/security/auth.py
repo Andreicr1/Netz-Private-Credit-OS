@@ -7,9 +7,12 @@ from typing import Any
 
 import jwt
 from jwt import PyJWKClient
+from sqlalchemy import select
 from starlette.requests import Request
 
 from app.core.config import settings
+from app.core.db.models import User, UserFundRole
+from app.core.db.session import get_session_local
 from app.shared.enums import Env, Role
 
 
@@ -82,6 +85,51 @@ def _verify_entra_jwt(token: str) -> dict[str, Any]:
     )
 
 
+def _extract_claim_roles(claims: dict[str, Any]) -> set[Role]:
+    role_values = claims.get("roles") or []
+    out: set[Role] = set()
+    for value in role_values:
+        try:
+            out.add(Role(str(value)))
+        except Exception:
+            continue
+
+    admin_wids = {
+        "62e90394-69f5-4237-9190-012177145e10",  # Global Administrator
+        "194ae4cb-b126-40b2-bd5b-6091b380977d",  # Privileged Role Administrator
+    }
+    claim_wids = {str(value).lower() for value in (claims.get("wids") or [])}
+    if any(value.lower() in claim_wids for value in admin_wids):
+        out.add(Role.ADMIN)
+    return out
+
+
+def _load_user_context(actor_id: str, email: str | None) -> tuple[set[Role], set[uuid.UUID]]:
+    session = get_session_local()()
+    try:
+        user = None
+        if actor_id:
+            user = session.execute(select(User).where(User.external_id == actor_id)).scalar_one_or_none()
+        if user is None and email:
+            user = session.execute(select(User).where(User.email == email)).scalar_one_or_none()
+        if user is None:
+            return set(), set()
+
+        rows = session.execute(select(UserFundRole.role, UserFundRole.fund_id).where(UserFundRole.user_id == user.id)).all()
+        roles: set[Role] = set()
+        funds: set[uuid.UUID] = set()
+        for role_value, fund_id in rows:
+            try:
+                roles.add(Role(str(role_value)))
+            except Exception:
+                continue
+            if fund_id is not None:
+                funds.add(fund_id)
+        return roles, funds
+    finally:
+        session.close()
+
+
 def actor_from_request(request: Request) -> Actor:
     # DEV shortcut (only when ENV=dev)
     if settings.env == Env.dev:
@@ -99,10 +147,20 @@ def actor_from_request(request: Request) -> Actor:
     claims = _verify_entra_jwt(token)
 
     actor_id = str(claims.get("oid") or claims.get("sub") or "unknown")
+    email = claims.get("email") or claims.get("preferred_username") or claims.get("upn")
 
-    # Roles/funds are tenant-specific; for scaffold we keep a safe default:
-    # - ADMIN must be granted explicitly via app config/mapping later.
-    roles: tuple[Role, ...] = (Role.INVESTOR,)
-    fund_ids: tuple[uuid.UUID, ...] = tuple()
-    return Actor(actor_id=actor_id, roles=roles, fund_ids=fund_ids, is_admin=False)
+    claim_roles = _extract_claim_roles(claims)
+    db_roles, db_funds = _load_user_context(actor_id=actor_id, email=str(email) if email else None)
+
+    effective_roles = claim_roles.union(db_roles)
+    if not effective_roles:
+        effective_roles = {Role.INVESTOR}
+
+    is_admin = Role.ADMIN in effective_roles
+    return Actor(
+        actor_id=actor_id,
+        roles=tuple(sorted(effective_roles, key=lambda value: value.value)),
+        fund_ids=tuple(sorted(db_funds, key=str)),
+        is_admin=is_admin,
+    )
 
