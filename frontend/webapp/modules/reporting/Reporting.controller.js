@@ -2,10 +2,11 @@ sap.ui.define([
   "sap/ui/core/mvc/Controller",
   "sap/ui/model/json/JSONModel",
   "sap/m/MessageToast",
-  "sap/m/URLHelper",
+  "sap/m/library",
   "netz/fund/os/services/api",
   "netz/fund/os/api/reports"
-], function (Controller, JSONModel, MessageToast, URLHelper, api, reportsApi) {
+], function (Controller, JSONModel, MessageToast, mobileLibrary, api, reportsApi) {
+  var URLHelper = sap.m.URLHelper;
   "use strict";
 
   function getFundIdFromQuery() {

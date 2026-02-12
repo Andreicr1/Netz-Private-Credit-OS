@@ -63,7 +63,11 @@ sap.ui.define([
 
       if (route === "signatures") {
         var fundId = getFundIdFromQuery();
-        UIComponent.getRouterFor(this).navTo(route, { fundId: fundId || "" });
+        if (!fundId) {
+          sap.m.MessageToast.show("No Fund ID available. Set ?fundId= in the URL.");
+          return;
+        }
+        UIComponent.getRouterFor(this).navTo(route, { fundId: fundId });
         return;
       }
 
