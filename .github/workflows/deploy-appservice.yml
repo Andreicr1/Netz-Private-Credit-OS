@@ -14,9 +14,14 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-  AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
-  AZURE_WEBAPP_URL: ${{ vars.AZURE_WEBAPP_URL }}
+  # Prefer GitHub repo/environment variables, but keep safe defaults so the workflow
+  # remains runnable even if vars are not configured.
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || 'Netz-International' }}
+  AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'netz-prod-api' }}
+  AZURE_WEBAPP_URL: ${{ vars.AZURE_WEBAPP_URL || 'https://netz-prod-api.azurewebsites.net' }}
+  # Optional: when set, the workflow will configure authsettingsV2 to allow anonymous.
+  # Leave unset to skip that management operation.
+  SWA_CLIENT_ID: ${{ vars.SWA_CLIENT_ID }}
 
 jobs:
   deploy:
@@ -109,79 +114,24 @@ jobs:
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Configure App Service build + startup
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [[ -z "${AZURE_RESOURCE_GROUP}" || -z "${AZURE_WEBAPP_NAME}" ]]; then
-            echo "Missing vars.AZURE_RESOURCE_GROUP or vars.AZURE_WEBAPP_NAME"
-            exit 1
-          fi
-
-          az webapp config appsettings set \
-            --resource-group "${AZURE_RESOURCE_GROUP}" \
-            --name "${AZURE_WEBAPP_NAME}" \
-            --settings \
-              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
-              WEBSITE_RUN_FROM_PACKAGE=0 \
-              PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages
-
-          # Startup command: cd into the backend directory and run gunicorn.
-          # No need for bash -c wrapper — Oryx runs the command through bash.
-          # PYTHONPATH is already set as an app setting above.
-          # $PORT is expanded at runtime by the container (typically 8000).
-          STARTUP_CMD='cd /home/site/wwwroot/backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
-          az webapp config set \
-            --resource-group "${AZURE_RESOURCE_GROUP}" \
-            --name "${AZURE_WEBAPP_NAME}" \
-            --startup-file "${STARTUP_CMD}"
-
-          # EasyAuth: allow anonymous requests so health probes and direct
-          # API calls reach FastAPI (which has its own JWT auth middleware).
-          # Without this, EasyAuth returns 401 for ALL unauthenticated calls.
-          az rest --method PUT \
-            --url "https://management.azure.com/subscriptions/${{ secrets.AZURE_SUBSCRIPTION_ID }}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.Web/sites/${AZURE_WEBAPP_NAME}/config/authsettingsV2?api-version=2023-12-01" \
-            --body '{"properties":{"platform":{"enabled":true,"runtimeVersion":"~1"},"globalValidation":{"requireAuthentication":false,"unauthenticatedClientAction":"AllowAnonymous"},"identityProviders":{"azureStaticWebApps":{"enabled":true,"registration":{"clientId":"lively-grass-036929e0f.2.azurestaticapps.net"}}}}}'
-
-          # Avoid SCM restarts racing with zip deploy
-          sleep 20
-
-      - name: Purge stale Oryx build artifacts
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          # Previous Oryx-based deployments leave oryx-manifest.toml and output.tar.zst
-          # at /home/site/wwwroot/. When the container starts, the Oryx startup script
-          # detects these, extracts the OLD build to /tmp/, redirects the app path there,
-          # and overwrites PYTHONPATH — causing the new zip deployment to be ignored.
-          # We delete them via the Kudu VFS REST API before deploying the new zip.
-          KUDU_URL="https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net"
-          TOKEN=$(az account get-access-token --query accessToken -o tsv)
-
-          for artifact in oryx-manifest.toml output.tar.zst; do
-            echo "Deleting ${artifact} from wwwroot (if exists)..."
-            curl -sf -X DELETE \
-              -H "Authorization: Bearer ${TOKEN}" \
-              -H "If-Match: *" \
-              "${KUDU_URL}/api/vfs/site/wwwroot/${artifact}" \
-              && echo "  deleted." \
-              || echo "  not found or already gone — OK."
-          done
+          # Support both the "standard" secret names and the Azure-generated ones.
+          client-id: ${{ secrets.AZURE_CLIENT_ID || secrets.AZUREAPPSERVICE_CLIENTID_426D9D8CF5E44278B95832DF7A8B952C }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID || secrets.AZUREAPPSERVICE_TENANTID_86103DA9D503455CBA1DD528317C4086 }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID || secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_2DB64B82AB4142F0BF1A20F53F83988A }}
 
       - name: Ensure site is started (Kudu needs a running site)
         shell: bash
         run: |
           set -euo pipefail
-          az webapp start \
-            --resource-group "${AZURE_RESOURCE_GROUP}" \
-            --name "${AZURE_WEBAPP_NAME}" || true
-          sleep 10
+
+          state=$(az webapp show --resource-group "${AZURE_RESOURCE_GROUP}" --name "${AZURE_WEBAPP_NAME}" --query state -o tsv)
+          echo "Current site state: ${state}"
+
+          if [[ "${state}" != "Running" ]]; then
+            az webapp start --resource-group "${AZURE_RESOURCE_GROUP}" --name "${AZURE_WEBAPP_NAME}"
+            echo "Waiting 60s for SCM container to stabilize after start..."
+            sleep 60
+          fi
 
       - name: Deploy (az webapp deploy)
         shell: bash
@@ -204,6 +154,72 @@ jobs:
           # Give Kudu time to rsync the zip contents to wwwroot (takes ~2-3 min for 6k+ files)
           echo "Waiting 180s for Kudu to extract the zip..."
           sleep 180
+
+      - name: Purge stale Oryx build artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # If older Oryx-based deployments left artifacts at wwwroot, they can
+          # override the new content at startup. Removing them post-deploy avoids
+          # racing a zip deployment with a management/config operation.
+          KUDU_URL="https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net"
+          TOKEN=$(az account get-access-token --query accessToken -o tsv)
+
+          for artifact in oryx-manifest.toml output.tar.zst; do
+            echo "Deleting ${artifact} from wwwroot (if exists)..."
+            curl -sf -X DELETE \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "If-Match: *" \
+              "${KUDU_URL}/api/vfs/site/wwwroot/${artifact}" \
+              && echo "  deleted." \
+              || echo "  not found or already gone — OK."
+          done
+
+      - name: Configure App Service build + startup (post-deploy)
+        shell: bash
+        env:
+          AZURE_SUBSCRIPTION_ID_EFFECTIVE: ${{ secrets.AZURE_SUBSCRIPTION_ID || secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_2DB64B82AB4142F0BF1A20F53F83988A }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${AZURE_RESOURCE_GROUP}" || -z "${AZURE_WEBAPP_NAME}" ]]; then
+            echo "Missing AZURE_RESOURCE_GROUP or AZURE_WEBAPP_NAME"
+            exit 1
+          fi
+
+          az webapp config appsettings set \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --settings \
+              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+              WEBSITE_RUN_FROM_PACKAGE=0 \
+              PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages
+
+          # Startup command: cd into the backend directory and run gunicorn.
+          # $PORT is expanded at runtime by the container.
+          STARTUP_CMD='cd /home/site/wwwroot/backend && gunicorn app.main:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120'
+          az webapp config set \
+            --resource-group "${AZURE_RESOURCE_GROUP}" \
+            --name "${AZURE_WEBAPP_NAME}" \
+            --startup-file "${STARTUP_CMD}"
+
+          # Optional EasyAuth configuration: only run when SWA_CLIENT_ID is provided.
+          if [[ -n "${SWA_CLIENT_ID:-}" ]]; then
+            if [[ -z "${AZURE_SUBSCRIPTION_ID_EFFECTIVE:-}" ]]; then
+              echo "SWA_CLIENT_ID is set, but subscription id secret is missing; cannot configure authsettingsV2."
+              exit 1
+            fi
+
+            az rest --method PUT \
+              --url "https://management.azure.com/subscriptions/${AZURE_SUBSCRIPTION_ID_EFFECTIVE}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.Web/sites/${AZURE_WEBAPP_NAME}/config/authsettingsV2?api-version=2023-12-01" \
+              --body "{\"properties\":{\"platform\":{\"enabled\":true,\"runtimeVersion\":\"~1\"},\"globalValidation\":{\"requireAuthentication\":false,\"unauthenticatedClientAction\":\"AllowAnonymous\"},\"identityProviders\":{\"azureStaticWebApps\":{\"enabled\":true,\"registration\":{\"clientId\":\"${SWA_CLIENT_ID}\"}}}}}"
+          else
+            echo "SWA_CLIENT_ID not set; skipping authsettingsV2 configuration."
+          fi
+
+          echo "Waiting 30s for config changes to apply..."
+          sleep 30
 
       - name: Smoke test /health
         shell: bash
