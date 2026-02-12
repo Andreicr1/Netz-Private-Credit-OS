@@ -34,7 +34,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.9"
 
       - name: Build Python dependencies (prebuilt)
         shell: bash
@@ -46,15 +46,15 @@ jobs:
           # If we build native deps (e.g., cryptography) on the runner, we can ship binaries that
           # fail at runtime with errors like: "GLIBC_2.xx not found".
           #
-          # To avoid this, download and install ONLY prebuilt manylinux wheels for CPython 3.11.
+          # To avoid this, download and install ONLY prebuilt manylinux wheels for CPython 3.9.
           rm -rf .wheelhouse
           python -m pip download \
             --dest .wheelhouse \
             --only-binary=:all: \
             --platform manylinux2014_x86_64 \
-            --python-version 311 \
+            --python-version 39 \
             --implementation cp \
-            --abi cp311 \
+            --abi cp39 \
             -r backend/requirements.txt
 
           python -m pip install \
