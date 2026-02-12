@@ -195,7 +195,7 @@ jobs:
           KUDU_URL="https://${AZURE_WEBAPP_NAME}.scm.azurewebsites.net"
           TOKEN=$(az account get-access-token --query accessToken -o tsv)
 
-          CMD='bash -lc "cd /home/site/wwwroot/backend && export PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages && python3 -m alembic -c alembic.ini upgrade head"'
+          CMD='/bin/bash /home/site/wwwroot/backend/scripts/run_alembic_migration.sh'
           RESP=$(curl -sf -X POST \
             -H "Authorization: Bearer ${TOKEN}" \
             -H "Content-Type: application/json" \
