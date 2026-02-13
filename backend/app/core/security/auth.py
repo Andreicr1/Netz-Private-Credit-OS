@@ -77,8 +77,8 @@ def _get_forwarded_aad_token(request: Request) -> str | None:
 
 
 def _decode_swa_client_principal(request: Request) -> tuple[str, str | None, dict[str, Any]] | None:
-    principal_id = request.headers.get("X-MS-CLIENT-PRINCIPAL-ID")
-    principal_name = request.headers.get("X-MS-CLIENT-PRINCIPAL-NAME")
+    principal_id = request.headers.get("X-NETZ-PRINCIPAL-ID") or request.headers.get("X-MS-CLIENT-PRINCIPAL-ID")
+    principal_name = request.headers.get("X-NETZ-PRINCIPAL-NAME") or request.headers.get("X-MS-CLIENT-PRINCIPAL-NAME")
     if principal_id:
         actor_id = str(principal_id)
         email = str(principal_name) if principal_name else None

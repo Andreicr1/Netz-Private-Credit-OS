@@ -37,10 +37,10 @@ async function getSwaClientPrincipalHeaders() {
         }
         const headers = {};
         if (principal.userId) {
-          headers["X-MS-CLIENT-PRINCIPAL-ID"] = String(principal.userId);
+          headers["X-NETZ-PRINCIPAL-ID"] = String(principal.userId);
         }
         if (principal.userDetails) {
-          headers["X-MS-CLIENT-PRINCIPAL-NAME"] = String(principal.userDetails);
+          headers["X-NETZ-PRINCIPAL-NAME"] = String(principal.userDetails);
         }
         return headers;
       })
