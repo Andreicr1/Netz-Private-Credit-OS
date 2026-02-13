@@ -10,35 +10,55 @@ export class SideNavigation {
       if (route) onNavigate(route);
     });
 
-    [
-      { label: "Dashboard", route: "/dashboard", icon: "home" },
-      { label: "Portfolio", route: "/portfolio", icon: "folder" },
-      { label: "Deals Pipeline", route: "/deals", icon: "pie-chart" },
-      { label: "Documents", route: "/documents", icon: "documents" },
-      { label: "Dataroom", route: "/dataroom", icon: "folder" },
-      { label: "Cash Management", route: "/cash", icon: "wallet" },
-      { label: "Compliance", route: "/compliance", icon: "shield" },
-      { label: "Actions", route: "/actions", icon: "sys-enter-2" },
-      { label: "AI", route: "/ai", icon: "ai" },
-      { label: "Reporting", route: "/reporting", icon: "pie-chart" },
-      { label: "Signatures", route: "/signatures", icon: "edit" },
-      { label: "Assets", route: "/assets", icon: "product" },
-      { label: "Alerts", route: "/alerts", icon: "alert" },
-      { label: "Portfolio Actions", route: "/portfolio-actions", icon: "action" },
-      { label: "Fund Investment", route: "/fund-investment", icon: "add-equipment" },
-      { label: "Asset Obligations", route: "/asset-obligations", icon: "receipt" },
-      { label: "Evidence", route: "/evidence", icon: "document-text" },
-      { label: "Auditor Evidence", route: "/auditor-evidence", icon: "inspection" },
-      { label: "Report Packs", route: "/report-packs", icon: "business-card" },
-      { label: "Investor Portal", route: "/investor-portal", icon: "customer" },
-      { label: "NAV Assets", route: "/nav-assets", icon: "table-chart" }
-    ].forEach((it) => {
-      const navItem = document.createElement("ui5-side-navigation-item");
-      navItem.text = it.label;
-      navItem.icon = it.icon;
-      navItem.dataset.route = it.route;
+    // ── Top-level: Dashboard ──
+    this._addItem({ label: "Dashboard", route: "/dashboard", icon: "home" });
+
+    // ── Investments ──
+    this._addGroupHeader("Investments");
+    this._addItem({ label: "Portfolio", route: "/portfolio", icon: "folder" });
+    this._addItem({ label: "Deals", route: "/deals", icon: "pie-chart" });
+
+    // ── Operations ──
+    this._addGroupHeader("Operations");
+    this._addItem({ label: "Cash", route: "/cash", icon: "wallet" });
+
+    // ── Governance ──
+    this._addGroupHeader("Governance");
+    this._addItem({ label: "Compliance", route: "/compliance", icon: "shield" });
+    this._addItem({ label: "Actions", route: "/actions", icon: "sys-enter-2" });
+
+    // ── Documents ──
+    this._addGroupHeader("Documents");
+    this._addItem({ label: "Data Room", route: "/dataroom", icon: "folder" });
+    this._addItem({ label: "Signatures", route: "/signatures", icon: "edit" });
+
+    // ── Reporting ──
+    this._addGroupHeader("Reporting");
+    this._addItem({ label: "Reporting", route: "/reporting", icon: "pie-chart" });
+
+    // ── Admin ──
+    this._addGroupHeader("Admin");
+    this._addItem({ label: "Admin", route: "/admin", icon: "settings" });
+    this._addItem({ label: "Audit Log", route: "/audit-log", icon: "history" });
+  }
+
+  _addGroupHeader(text) {
+    const group = document.createElement("ui5-side-navigation-group");
+    group.text = text;
+    this.el.appendChild(group);
+    this._currentGroup = group;
+  }
+
+  _addItem({ label, route, icon }) {
+    const navItem = document.createElement("ui5-side-navigation-item");
+    navItem.text = label;
+    navItem.icon = icon;
+    navItem.dataset.route = route;
+    if (this._currentGroup) {
+      this._currentGroup.appendChild(navItem);
+    } else {
       this.el.appendChild(navItem);
-    });
+    }
   }
 
   setSelectedRoute(routePath) {

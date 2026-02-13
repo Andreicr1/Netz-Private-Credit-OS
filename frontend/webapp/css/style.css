@@ -29,12 +29,6 @@ body {
   height: 100%;
 }
 
-.netz-content-host {
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
-}
-
 .netz-page-content {
   padding: 1rem;
   display: grid;
@@ -78,4 +72,161 @@ body {
   justify-content: flex-end;
   align-items: center;
   gap: 0.5rem;
+}
+
+/* ── Content wrapper (main + assistant drawer) ── */
+.netz-content-wrapper {
+  display: flex;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+.netz-content-host {
+  flex: 1;
+  height: 100%;
+  overflow: auto;
+}
+
+/* ── Assistant Drawer ── */
+.netz-assistant-drawer {
+  width: 0;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--sapBackgroundColor);
+  border-left: 1px solid var(--sapList_BorderColor);
+  display: flex;
+  flex-direction: column;
+  transition: width 0.25s ease, min-width 0.25s ease;
+}
+
+.netz-assistant-drawer--open {
+  width: 22rem;
+  min-width: 22rem;
+}
+
+.netz-assistant-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--sapList_BorderColor);
+  background: var(--sapShell_Background);
+}
+
+.netz-assistant-chat-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.netz-assistant-chat-history {
+  margin-top: 1rem;
+}
+
+.netz-assistant-input-bar {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--sapList_BorderColor);
+  background: var(--sapShell_Background);
+}
+
+/* ── Tab panels ── */
+.netz-tab-panel {
+  padding: 1.25rem 0.5rem;
+}
+
+/* ── Executive Dashboard ── */
+.netz-dashboard-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: 1.5rem 2rem;
+}
+
+.netz-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.25rem;
+}
+
+@media (max-width: 1024px) {
+  .netz-kpi-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .netz-kpi-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.netz-kpi-card {
+  min-width: 0;
+}
+
+.netz-kpi-body {
+  padding: 1.25rem 1.5rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.netz-kpi-value {
+  color: var(--sapTextColor);
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+}
+
+.netz-kpi-subtitle {
+  color: var(--sapNeutralTextColor);
+  font-size: var(--sapFontSmallSize);
+}
+
+.netz-section-divider {
+  padding-top: 0.5rem;
+}
+
+.netz-queue-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+@media (max-width: 1024px) {
+  .netz-queue-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.netz-queue-card {
+  min-width: 0;
+}
+
+.netz-queue-card ui5-list {
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+.netz-queue-empty {
+  padding: 2rem 1.5rem;
+  color: var(--sapNeutralTextColor);
+  text-align: center;
+  font-size: var(--sapFontSize);
+}
+
+/* ── Portfolio tables ── */
+.netz-portfolio-table {
+  width: 100%;
+}
+
+.netz-portfolio-table ui5-table-header-cell {
+  font-weight: 600;
+}
+
+.netz-portfolio-table ui5-table-cell {
+  padding-block: 0.625rem;
 }

@@ -1,6 +1,7 @@
 import { getFundIdFromQuery } from "../services/env.js";
 import { ensureAuthenticated } from "../services/apiClient.js";
 import { SideNavigation } from "./SideNavigation.js";
+import { AssistantDrawer } from "../components/AssistantDrawer.js";
 
 import { DashboardPage } from "../pages/Dashboard.js";
 import { DocumentsPage } from "../pages/DocumentsPage.js";
@@ -8,21 +9,10 @@ import { DataroomPage } from "../pages/DataroomPage.js";
 import { CashManagementPage } from "../pages/CashManagementPage.js";
 import { CompliancePage } from "../pages/CompliancePage.js";
 import { ActionsPage } from "../pages/ActionsPage.js";
-import { AiPage } from "../pages/AiPage.js";
 import { ReportingPage } from "../pages/ReportingPage.js";
 import { PortfolioPage } from "../pages/PortfolioPage.js";
 import { DealsPipelinePage } from "../pages/DealsPipelinePage.js";
 import { SignaturesPage } from "../pages/SignaturesPage.js";
-import { AssetsPage } from "../pages/AssetsPage.js";
-import { AlertsPage } from "../pages/AlertsPage.js";
-import { PortfolioActionsPage } from "../pages/PortfolioActionsPage.js";
-import { FundInvestmentPage } from "../pages/FundInvestmentPage.js";
-import { AssetObligationsPage } from "../pages/AssetObligationsPage.js";
-import { EvidencePage } from "../pages/EvidencePage.js";
-import { AuditorEvidencePage } from "../pages/AuditorEvidencePage.js";
-import { ReportPacksLegacyPage } from "../pages/ReportPacksLegacyPage.js";
-import { InvestorPortalPage } from "../pages/InvestorPortalPage.js";
-import { NavAssetsPage } from "../pages/NavAssetsPage.js";
 import { SignatureDetailView } from "../workflows/SignatureDetailView.js";
 
 function normalizePath(pathname) {
@@ -76,6 +66,16 @@ export class AppShell {
     avatar.slot = "profile";
     this.shellbar.appendChild(avatar);
 
+    // Assistant toggle button in ShellBar
+    this._assistantButton = document.createElement("ui5-button");
+    this._assistantButton.icon = "ai";
+    this._assistantButton.design = "Transparent";
+    this._assistantButton.tooltip = "Open AI Assistant";
+    this._assistantButton.accessibleName = "Toggle AI assistant panel";
+    this._assistantButton.slot = "startButton";
+    this._assistantButton.addEventListener("click", () => this._toggleAssistant());
+    this.shellbar.appendChild(this._assistantButton);
+
     this.shellbar.slot = "header";
     this.navLayout.appendChild(this.shellbar);
 
@@ -83,9 +83,19 @@ export class AppShell {
     this._nav.el.slot = "sideContent";
     this.navLayout.appendChild(this._nav.el);
 
+    // Main content area and assistant drawer wrapper
+    this._contentWrapper = document.createElement("div");
+    this._contentWrapper.className = "netz-content-wrapper";
+
     this._contentHost = document.createElement("div");
     this._contentHost.className = "netz-content-host";
-    this.navLayout.appendChild(this._contentHost);
+    this._contentWrapper.appendChild(this._contentHost);
+
+    // Assistant drawer
+    this._assistantDrawer = new AssistantDrawer({ onClose: () => this._toggleAssistant() });
+    this._contentWrapper.appendChild(this._assistantDrawer.el);
+
+    this.navLayout.appendChild(this._contentWrapper);
 
     this.el.appendChild(this.navLayout);
 
@@ -117,19 +127,10 @@ export class AppShell {
       "/cash",
       "/compliance",
       "/actions",
-      "/ai",
       "/reporting",
       "/signatures",
-      "/assets",
-      "/alerts",
-      "/portfolio-actions",
-      "/fund-investment",
-      "/asset-obligations",
-      "/evidence",
-      "/auditor-evidence",
-      "/report-packs",
-      "/investor-portal",
-      "/nav-assets",
+      "/admin",
+      "/audit-log",
     ];
 
     if (moduleRoutes.includes(pathname)) {
@@ -168,45 +169,17 @@ export class AppShell {
       case "/actions":
         this._renderPage(new ActionsPage({ fundId: this._fundId }));
         break;
-      case "/ai":
-      case "/copilot":
-        this._renderPage(new AiPage({ fundId: this._fundId }));
-        break;
       case "/reporting":
         this._renderPage(new ReportingPage({ fundId: this._fundId }));
         break;
       case "/signatures":
         this._renderPage(new SignaturesPage({ fundId: this._fundId }));
         break;
-      case "/assets":
-        this._renderPage(new AssetsPage({ fundId: this._fundId }));
+      case "/admin":
+        this._renderPlaceholderPage("Admin", "Admin panel — role-gated placeholder. No actions available.");
         break;
-      case "/alerts":
-        this._renderPage(new AlertsPage({ fundId: this._fundId }));
-        break;
-      case "/portfolio-actions":
-        this._renderPage(new PortfolioActionsPage({ fundId: this._fundId }));
-        break;
-      case "/fund-investment":
-        this._renderPage(new FundInvestmentPage({ fundId: this._fundId }));
-        break;
-      case "/asset-obligations":
-        this._renderPage(new AssetObligationsPage({ fundId: this._fundId }));
-        break;
-      case "/evidence":
-        this._renderPage(new EvidencePage({ fundId: this._fundId }));
-        break;
-      case "/auditor-evidence":
-        this._renderPage(new AuditorEvidencePage({ fundId: this._fundId }));
-        break;
-      case "/report-packs":
-        this._renderPage(new ReportPacksLegacyPage({ fundId: this._fundId }));
-        break;
-      case "/investor-portal":
-        this._renderPage(new InvestorPortalPage({ fundId: this._fundId }));
-        break;
-      case "/nav-assets":
-        this._renderPage(new NavAssetsPage({ fundId: this._fundId }));
+      case "/audit-log":
+        this._renderPlaceholderPage("Audit Log", "Audit log viewer — stub. Will surface backend audit trail.");
         break;
       default:
         this.navigate("/dashboard");
@@ -217,6 +190,35 @@ export class AppShell {
   _renderPage(page) {
     this._contentHost.replaceChildren(page.el);
     if (typeof page.onShow === "function") page.onShow();
+  }
+
+  _renderPlaceholderPage(title, message) {
+    const page = document.createElement("ui5-dynamic-page");
+    const pageTitle = document.createElement("ui5-dynamic-page-title");
+    const h = document.createElement("ui5-title");
+    h.level = "H1";
+    h.textContent = title;
+    pageTitle.appendChild(h);
+    page.appendChild(pageTitle);
+
+    const content = document.createElement("div");
+    content.className = "netz-page-content";
+    const strip = document.createElement("ui5-message-strip");
+    strip.design = "Information";
+    strip.hideCloseButton = true;
+    strip.textContent = message;
+    content.appendChild(strip);
+    page.appendChild(content);
+
+    this._contentHost.replaceChildren(page);
+  }
+
+  _toggleAssistant() {
+    if (this._assistantDrawer.isOpen) {
+      this._assistantDrawer.hide();
+    } else {
+      this._assistantDrawer.show();
+    }
   }
 
   _toggleSideNav() {

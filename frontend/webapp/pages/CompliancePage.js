@@ -1,4 +1,7 @@
 import * as complianceApi from "../api/compliance.js";
+import * as evidenceApi from "../api/evidence.js";
+import * as auditorEvidenceApi from "../api/auditorEvidence.js";
+import * as documentsApi from "../api/documents.js";
 
 function pretty(value) {
   try {
@@ -16,113 +19,152 @@ function firstItemId(page) {
   return "";
 }
 
+/**
+ * CompliancePage — tab container for compliance sub-domains.
+ *
+ * Tabs: Snapshot | Obligations | Evidence | Auditor Evidence | Gaps | Audit Trail
+ */
 export class CompliancePage {
   constructor({ fundId }) {
     this.fundId = fundId;
+    this._activeTab = "snapshot";
     this.selectedObligationId = "";
 
     this.el = document.createElement("ui5-dynamic-page");
 
-    const title = document.createElement("ui5-dynamic-page-title");
+    const pageTitle = document.createElement("ui5-dynamic-page-title");
     const h = document.createElement("ui5-title");
     h.level = "H1";
     h.textContent = "Compliance";
-    title.appendChild(h);
-    this.el.appendChild(title);
+    pageTitle.appendChild(h);
+    this.el.appendChild(pageTitle);
 
-    const header = document.createElement("ui5-dynamic-page-header");
-    const strip = document.createElement("ui5-message-strip");
-    strip.design = "Information";
-    strip.hideCloseButton = true;
-    strip.textContent = "Wave 2 placeholder: snapshot, obligations, detail, evidence, workflow and audit trail.";
-    header.appendChild(strip);
-    this.el.appendChild(header);
+    // Tab container
+    this.tabContainer = document.createElement("ui5-tabcontainer");
+    this.tabContainer.className = "netz-compliance-tabs";
+    this.tabContainer.addEventListener("tab-select", (e) => {
+      const key = e.detail?.tab?.dataset?.key;
+      if (key) {
+        this._activeTab = key;
+        this._loadTabData(key);
+      }
+    });
 
+    const tabDefs = [
+      { key: "snapshot", text: "Snapshot", icon: "bar-chart" },
+      { key: "obligations", text: "Obligations", icon: "task" },
+      { key: "evidence", text: "Evidence", icon: "document-text" },
+      { key: "auditor-evidence", text: "Auditor Evidence", icon: "inspection" },
+      { key: "gaps", text: "Gaps", icon: "warning" },
+      { key: "audit-trail", text: "Audit Trail", icon: "history" },
+    ];
+
+    this._tabPanels = {};
+    tabDefs.forEach((def, idx) => {
+      const tab = document.createElement("ui5-tab");
+      tab.text = def.text;
+      tab.icon = def.icon;
+      tab.dataset.key = def.key;
+      if (idx === 0) tab.selected = true;
+
+      const panel = document.createElement("div");
+      panel.className = "netz-tab-panel";
+
+      // For obligations tab: add controls
+      if (def.key === "obligations") {
+        const controls = document.createElement("div");
+        controls.style.display = "flex";
+        controls.style.flexWrap = "wrap";
+        controls.style.gap = "0.5rem";
+        controls.style.marginBottom = "0.75rem";
+
+        this.obligationIdInput = document.createElement("ui5-input");
+        this.obligationIdInput.placeholder = "Obligation ID";
+        this.obligationIdInput.style.minWidth = "24rem";
+
+        const loadDetail = document.createElement("ui5-button");
+        loadDetail.textContent = "Open Obligation Detail";
+        loadDetail.addEventListener("click", () => this.loadObligationDetail());
+
+        const markInProgress = document.createElement("ui5-button");
+        markInProgress.textContent = "Mark In Progress";
+        markInProgress.addEventListener("click", () => this.markObligationInProgress());
+
+        const closeObl = document.createElement("ui5-button");
+        closeObl.textContent = "Close Obligation";
+        closeObl.addEventListener("click", () => this.closeObligation());
+
+        const recomputeStatus = document.createElement("ui5-button");
+        recomputeStatus.textContent = "Recompute Status";
+        recomputeStatus.addEventListener("click", () => this.recomputeStatus());
+
+        const recomputeGaps = document.createElement("ui5-button");
+        recomputeGaps.textContent = "Recompute Gaps";
+        recomputeGaps.addEventListener("click", () => this.recomputeGaps());
+
+        controls.append(this.obligationIdInput, loadDetail, markInProgress, closeObl, recomputeStatus, recomputeGaps);
+        panel.appendChild(controls);
+      }
+
+      // For evidence tab: add controls
+      if (def.key === "evidence") {
+        const controls = document.createElement("div");
+        controls.style.display = "flex";
+        controls.style.flexWrap = "wrap";
+        controls.style.gap = "0.5rem";
+        controls.style.marginBottom = "0.75rem";
+
+        this.evidenceIdInput = document.createElement("ui5-input");
+        this.evidenceIdInput.placeholder = "Evidence ID";
+
+        const createUpload = document.createElement("ui5-button");
+        createUpload.design = "Emphasized";
+        createUpload.textContent = "Create Upload Request";
+        createUpload.addEventListener("click", () => this.createUploadRequest());
+
+        const complete = document.createElement("ui5-button");
+        complete.textContent = "Complete Evidence";
+        complete.addEventListener("click", () => this.completeEvidence());
+
+        controls.append(this.evidenceIdInput, createUpload, complete);
+        panel.appendChild(controls);
+      }
+
+      const output = document.createElement("pre");
+      output.className = "netz-tab-output";
+      output.style.padding = "0.75rem";
+      output.style.border = "1px solid var(--sapList_BorderColor)";
+      output.style.whiteSpace = "pre-wrap";
+      panel.appendChild(output);
+      tab.appendChild(panel);
+
+      this._tabPanels[def.key] = { tab, output };
+      this.tabContainer.appendChild(tab);
+    });
+
+    // Error strip
+    this.error = document.createElement("ui5-message-strip");
+    this.error.design = "Negative";
+    this.error.style.display = "none";
+
+    // Busy indicator
     this.busy = document.createElement("ui5-busy-indicator");
     this.busy.active = false;
     this.busy.style.width = "100%";
 
     const content = document.createElement("div");
     content.className = "netz-page-content";
-
-    this.error = document.createElement("ui5-message-strip");
-    this.error.design = "Negative";
-    this.error.style.display = "none";
-    content.appendChild(this.error);
-
-    const controls = document.createElement("div");
-    controls.style.display = "flex";
-    controls.style.flexWrap = "wrap";
-    controls.style.gap = "0.5rem";
-    controls.style.marginBottom = "0.75rem";
-
-    this.obligationIdInput = document.createElement("ui5-input");
-    this.obligationIdInput.placeholder = "Obligation ID";
-    this.obligationIdInput.style.minWidth = "24rem";
-
-    this.refreshButton = document.createElement("ui5-button");
-    this.refreshButton.design = "Emphasized";
-    this.refreshButton.textContent = "Refresh Compliance";
-    this.refreshButton.addEventListener("click", () => this.onShow());
-
-    this.loadDetailButton = document.createElement("ui5-button");
-    this.loadDetailButton.textContent = "Open Obligation Detail";
-    this.loadDetailButton.addEventListener("click", () => this.loadObligationDetail());
-
-    this.markInProgressButton = document.createElement("ui5-button");
-    this.markInProgressButton.textContent = "Mark In Progress";
-    this.markInProgressButton.addEventListener("click", () => this.markObligationInProgress());
-
-    this.closeButton = document.createElement("ui5-button");
-    this.closeButton.textContent = "Close Obligation";
-    this.closeButton.addEventListener("click", () => this.closeObligation());
-
-    this.recomputeStatusButton = document.createElement("ui5-button");
-    this.recomputeStatusButton.textContent = "Recompute Status";
-    this.recomputeStatusButton.addEventListener("click", () => this.recomputeStatus());
-
-    this.recomputeGapsButton = document.createElement("ui5-button");
-    this.recomputeGapsButton.textContent = "Recompute Gaps";
-    this.recomputeGapsButton.addEventListener("click", () => this.recomputeGaps());
-
-    controls.append(
-      this.obligationIdInput,
-      this.refreshButton,
-      this.loadDetailButton,
-      this.markInProgressButton,
-      this.closeButton,
-      this.recomputeStatusButton,
-      this.recomputeGapsButton,
-    );
-    content.appendChild(controls);
-
-    this.snapshotPre = document.createElement("pre");
-    this.snapshotPre.style.padding = "0.75rem";
-    this.snapshotPre.style.border = "1px solid var(--sapList_BorderColor)";
-
-    this.obligationsPre = document.createElement("pre");
-    this.obligationsPre.style.padding = "0.75rem";
-    this.obligationsPre.style.border = "1px solid var(--sapList_BorderColor)";
-
-    this.detailPre = document.createElement("pre");
-    this.detailPre.style.padding = "0.75rem";
-    this.detailPre.style.border = "1px solid var(--sapList_BorderColor)";
-
-    this.auditPre = document.createElement("pre");
-    this.auditPre.style.padding = "0.75rem";
-    this.auditPre.style.border = "1px solid var(--sapList_BorderColor)";
-
-    content.append(this.snapshotPre, this.obligationsPre, this.detailPre, this.auditPre);
+    content.append(this.error, this.tabContainer);
     this.busy.appendChild(content);
     this.el.appendChild(this.busy);
   }
 
   _effectiveObligationId() {
-    return String(this.obligationIdInput.value || this.selectedObligationId || "").trim();
+    return String(this.obligationIdInput?.value || this.selectedObligationId || "").trim();
   }
 
-  _setError(message) {
-    this.error.textContent = message;
+  _setError(msg) {
+    this.error.textContent = msg;
     this.error.style.display = "block";
   }
 
@@ -132,38 +174,65 @@ export class CompliancePage {
   }
 
   async onShow() {
-    this.busy.active = true;
     this._clearError();
-
     if (!this.fundId) {
       this._setError("No fund scope. Provide ?fundId= in the URL.");
-      this.busy.active = false;
       return;
     }
+    await this._loadTabData(this._activeTab);
+  }
 
+  async _loadTabData(key) {
+    this.busy.active = true;
+    this._clearError();
+    const out = this._tabPanels[key]?.output;
     try {
-      const [snapshot, obligations, gaps] = await Promise.all([
-        complianceApi.getComplianceSnapshot(this.fundId),
-        complianceApi.listComplianceObligations(this.fundId, { limit: 10, offset: 0, view: "all" }),
-        complianceApi.listComplianceGaps(this.fundId, { limit: 10, offset: 0 }),
-      ]);
-
-      this.selectedObligationId = firstItemId(obligations);
-      if (!this.obligationIdInput.value && this.selectedObligationId) {
-        this.obligationIdInput.value = this.selectedObligationId;
+      let data;
+      switch (key) {
+        case "snapshot":
+          data = await complianceApi.getComplianceSnapshot(this.fundId);
+          break;
+        case "obligations": {
+          const obligations = await complianceApi.listComplianceObligations(this.fundId, { limit: 20, offset: 0, view: "all" });
+          this.selectedObligationId = firstItemId(obligations);
+          if (this.obligationIdInput && !this.obligationIdInput.value && this.selectedObligationId) {
+            this.obligationIdInput.value = this.selectedObligationId;
+          }
+          data = obligations;
+          break;
+        }
+        case "evidence": {
+          const obligations = await complianceApi.listComplianceObligations(this.fundId, { limit: 5, offset: 0 });
+          data = { message: "Use controls above to create upload requests or complete evidence.", obligations };
+          break;
+        }
+        case "auditor-evidence": {
+          const [auditorEvidence, documents] = await Promise.all([
+            auditorEvidenceApi.listAuditorEvidence(this.fundId),
+            documentsApi.listDocuments(this.fundId, { limit: 10, offset: 0 }),
+          ]);
+          data = { auditorEvidence, documents };
+          break;
+        }
+        case "gaps":
+          data = await complianceApi.listComplianceGaps(this.fundId, { limit: 20, offset: 0 });
+          break;
+        case "audit-trail": {
+          const obligationId = this._effectiveObligationId();
+          if (obligationId) {
+            data = await complianceApi.listComplianceObligationAudit(this.fundId, obligationId);
+          } else {
+            data = { message: "Select an obligation first to view its audit trail." };
+          }
+          break;
+        }
+        default:
+          data = {};
       }
-
-      this.snapshotPre.textContent = pretty({ snapshot, gaps });
-      this.obligationsPre.textContent = pretty(obligations);
-
-      if (this._effectiveObligationId()) {
-        await this.loadObligationDetail();
-      } else {
-        this.detailPre.textContent = pretty({ message: "No obligation available." });
-        this.auditPre.textContent = pretty([]);
-      }
+      if (out) out.textContent = pretty(data);
     } catch (error) {
-      this._setError(error?.message ? String(error.message) : "Failed to load compliance data");
+      this._setError(error?.message ? String(error.message) : `Failed to load ${key}`);
+      if (out) out.textContent = "{}";
     } finally {
       this.busy.active = false;
     }
@@ -175,7 +244,6 @@ export class CompliancePage {
       this._setError("Provide an obligation id to load detail.");
       return;
     }
-
     this.busy.active = true;
     this._clearError();
     try {
@@ -184,8 +252,8 @@ export class CompliancePage {
         complianceApi.listComplianceObligationEvidence(this.fundId, obligationId),
         complianceApi.listComplianceObligationAudit(this.fundId, obligationId),
       ]);
-      this.detailPre.textContent = pretty({ detail, evidence });
-      this.auditPre.textContent = pretty(audit);
+      const out = this._tabPanels["obligations"]?.output;
+      if (out) out.textContent = pretty({ detail, evidence, audit });
     } catch (error) {
       this._setError(error?.message ? String(error.message) : "Failed to load obligation detail");
     } finally {
@@ -199,7 +267,6 @@ export class CompliancePage {
       this._setError("Provide an obligation id to mark in progress.");
       return;
     }
-
     this.busy.active = true;
     this._clearError();
     try {
@@ -218,7 +285,6 @@ export class CompliancePage {
       this._setError("Provide an obligation id to close.");
       return;
     }
-
     this.busy.active = true;
     this._clearError();
     try {
@@ -235,11 +301,9 @@ export class CompliancePage {
     this.busy.active = true;
     this._clearError();
     try {
-      const statusPage = await complianceApi.recomputeComplianceObligationStatus(this.fundId);
-      this.snapshotPre.textContent = pretty({
-        snapshot: await complianceApi.getComplianceSnapshot(this.fundId),
-        recomputed_status: statusPage,
-      });
+      const result = await complianceApi.recomputeComplianceObligationStatus(this.fundId);
+      const out = this._tabPanels["snapshot"]?.output;
+      if (out) out.textContent = pretty({ recomputed_status: result });
     } catch (error) {
       this._setError(error?.message ? String(error.message) : "Failed to recompute obligation status");
     } finally {
@@ -251,13 +315,44 @@ export class CompliancePage {
     this.busy.active = true;
     this._clearError();
     try {
-      const recomputed = await complianceApi.recomputeComplianceGaps(this.fundId);
-      this.snapshotPre.textContent = pretty({
-        snapshot: await complianceApi.getComplianceSnapshot(this.fundId),
-        recomputed_gaps: recomputed,
-      });
+      const result = await complianceApi.recomputeComplianceGaps(this.fundId);
+      const out = this._tabPanels["gaps"]?.output;
+      if (out) out.textContent = pretty({ recomputed_gaps: result });
     } catch (error) {
       this._setError(error?.message ? String(error.message) : "Failed to recompute gaps");
+    } finally {
+      this.busy.active = false;
+    }
+  }
+
+  async createUploadRequest() {
+    this.busy.active = true;
+    this._clearError();
+    try {
+      const request = await evidenceApi.createEvidenceUploadRequest(this.fundId, { filename: `evidence-${Date.now()}.pdf` });
+      const out = this._tabPanels["evidence"]?.output;
+      if (out) out.textContent = pretty({ request });
+    } catch (error) {
+      this._setError(error?.message ? String(error.message) : "Failed to create upload request");
+    } finally {
+      this.busy.active = false;
+    }
+  }
+
+  async completeEvidence() {
+    const evidenceId = String(this.evidenceIdInput?.value || "").trim();
+    if (!evidenceId) {
+      this._setError("Provide an evidence ID to complete.");
+      return;
+    }
+    this.busy.active = true;
+    this._clearError();
+    try {
+      const completed = await evidenceApi.completeEvidence(this.fundId, evidenceId, { status: "complete" });
+      const out = this._tabPanels["evidence"]?.output;
+      if (out) out.textContent = pretty({ completed });
+    } catch (error) {
+      this._setError(error?.message ? String(error.message) : "Failed to complete evidence");
     } finally {
       this.busy.active = false;
     }
