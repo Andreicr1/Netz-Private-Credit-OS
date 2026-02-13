@@ -1,5 +1,4 @@
 const DEFAULT_FUND_ID = "00000000-0000-0000-0000-000000000001";
-const APIM_BASE_URL = "https://netz-prod-api-apim.azure-api.net/api";
 const DEFAULT_DEV_ACTOR = {
   actor_id: "netz-frontend-dev",
   roles: ["ADMIN"],
@@ -18,8 +17,13 @@ export function getFundIdFromQuery() {
   return normalized || DEFAULT_FUND_ID;
 }
 
+/**
+ * Always returns a relative base URL so every call flows through the
+ * Azure Static Web Apps linked-backend proxy.  Never use an absolute
+ * URL here — direct browser-to-APIM calls are prohibited.
+ */
 export function getApiBaseUrl() {
-  return isLocalhost() ? "/api" : APIM_BASE_URL;
+  return "/api";
 }
 
 export function getDevActorHeaderValue() {
