@@ -44,3 +44,16 @@ export function searchDataroom(params = {}) {
   const url = `${getApiBaseUrl()}/dataroom/search?${qs.join("&")}`;
   return fetchJson(url, { method: "GET" });
 }
+
+/**
+ * Browse dataroom blob container — list folders and files at a prefix.
+ * @param {object} params
+ * @param {string} [params.prefix] — Virtual folder prefix (e.g. "1 Corporate Documentation/")
+ * @returns {Promise<{container: string, prefix: string, count: number, items: Array}>}
+ */
+export function browseDataroom(params = {}) {
+  const qs = [];
+  if (params.prefix) qs.push(`prefix=${encodeURIComponent(String(params.prefix))}`);
+  const url = `${getApiBaseUrl()}/dataroom/browse${qs.length ? "?" + qs.join("&") : ""}`;
+  return fetchJson(url, { method: "GET" });
+}

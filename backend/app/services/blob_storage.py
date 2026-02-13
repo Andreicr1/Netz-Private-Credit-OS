@@ -232,3 +232,67 @@ def download_bytes(*, blob_uri: str) -> bytes:
     stream = bc.download_blob()
     return stream.readall()
 
+
+@dataclass(frozen=True)
+class BlobEntry:
+    """Represents a blob or virtual folder in a container listing."""
+    name: str
+    is_folder: bool
+    size_bytes: int | None = None
+    content_type: str | None = None
+    last_modified: str | None = None
+
+
+def list_blobs(
+    *,
+    container: str,
+    prefix: str | None = None,
+    delimiter: str = "/",
+) -> list[BlobEntry]:
+    """
+    List blobs and virtual folders under a prefix in a container.
+    Uses delimiter-based listing (virtual directory browsing).
+    """
+    if _use_local_storage():
+        base = _local_base_dir() / container
+        if prefix:
+            base = base / Path(prefix)
+        entries: list[BlobEntry] = []
+        if base.is_dir():
+            for child in sorted(base.iterdir()):
+                if child.is_dir():
+                    rel = child.name + "/"
+                    entries.append(BlobEntry(name=(prefix or "") + rel, is_folder=True))
+                else:
+                    entries.append(BlobEntry(
+                        name=(prefix or "") + child.name,
+                        is_folder=False,
+                        size_bytes=child.stat().st_size,
+                        content_type=None,
+                        last_modified=None,
+                    ))
+        return entries
+
+    svc = _service_client()
+    container_client = svc.get_container_client(container)
+    entries = []
+
+    blobs_iter = container_client.walk_blobs(name_starts_with=prefix or "", delimiter=delimiter)
+    for item in blobs_iter:
+        # BlobPrefix (virtual folder) has .prefix attribute
+        if hasattr(item, "prefix"):
+            entries.append(BlobEntry(name=item.prefix, is_folder=True))
+        else:
+            lm = None
+            if item.last_modified:
+                lm = item.last_modified.isoformat()
+            entries.append(BlobEntry(
+                name=item.name,
+                is_folder=False,
+                size_bytes=item.size,
+                content_type=getattr(item.content_settings, "content_type", None) if item.content_settings else None,
+                last_modified=lm,
+            ))
+
+    return entries
+

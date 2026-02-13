@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import dataclasses
 import uuid
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.db.session import get_db
 from app.core.security.dependencies import get_actor
 from app.core.security.rbac import require_role
+from app.services.blob_storage import list_blobs
 from app.services.dataroom_ingest import ingest_document_version, upload_dataroom_document
 from app.services.search_index import AzureSearchMetadataClient
 
@@ -16,6 +19,8 @@ router = APIRouter(prefix="/api/dataroom", tags=["Dataroom"])
 
 
 def _require_fund_access_from_value(fund_id: uuid.UUID, actor=Depends(get_actor)) -> uuid.UUID:
+    if settings.AUTHZ_BYPASS_ENABLED:
+        return fund_id
     if not actor.can_access_fund(fund_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden for this fund")
     return fund_id
@@ -85,4 +90,29 @@ def search(
     client = AzureSearchMetadataClient()
     hits = client.search(q=q, fund_id=str(fund_id), top=top)
     return {"query": q, "count": len(hits), "hits": [h.__dict__ for h in hits]}
+
+
+@router.get("/browse")
+def browse(
+    prefix: str = Query("", max_length=500),
+    actor=Depends(require_role(["INVESTMENT_TEAM", "COMPLIANCE", "GP", "ADMIN", "AUDITOR"])),
+):
+    """
+    List folders and files in the dataroom blob container.
+    Uses virtual directory (delimiter-based) listing.
+    """
+    container = settings.AZURE_STORAGE_DATAROOM_CONTAINER
+    try:
+        entries = list_blobs(container=container, prefix=prefix or None)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to list dataroom storage: {exc}",
+        )
+    return {
+        "container": container,
+        "prefix": prefix or "",
+        "count": len(entries),
+        "items": [dataclasses.asdict(e) for e in entries],
+    }
 

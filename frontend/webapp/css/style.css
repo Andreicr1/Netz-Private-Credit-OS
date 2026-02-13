@@ -456,3 +456,73 @@ body {
 .netz-portfolio-table ui5-table-cell {
   padding-block: 0.625rem;
 }
+
+/* ── Data Room ── */
+.netz-dataroom-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+}
+
+.netz-dataroom-breadcrumbs {
+  padding: 0.25rem 0;
+}
+
+.netz-dataroom-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.netz-dataroom-summary-label {
+  color: var(--sapNeutralTextColor);
+  font-size: var(--sapFontSmallSize);
+}
+
+.netz-dataroom-table-wrap {
+  width: 100%;
+}
+
+.netz-dataroom-table {
+  width: 100%;
+}
+
+.netz-dataroom-table ui5-table-header-cell {
+  font-weight: 600;
+  font-size: var(--sapFontSmallSize);
+}
+
+.netz-dataroom-table ui5-table-row[style*="cursor"] {
+  transition: background 0.15s ease;
+}
+
+.netz-dataroom-table ui5-table-row[style*="cursor"]:hover {
+  background: var(--sapList_Hover_Background);
+}
+
+.netz-dataroom-empty {
+  padding: 3rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.netz-dataroom-empty-icon {
+  color: var(--sapNeutralBorderColor);
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.netz-dataroom-empty-msg {
+  color: var(--sapNeutralTextColor);
+  font-size: var(--sapFontSize);
+  font-weight: 600;
+}
+
+.netz-dataroom-empty-hint {
+  color: var(--sapNeutralTextColor);
+  font-size: var(--sapFontSmallSize);
+}
