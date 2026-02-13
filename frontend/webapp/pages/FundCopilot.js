@@ -103,7 +103,7 @@ export class FundCopilotPage {
     Array.from(this.citations.querySelectorAll("ui5-table-row")).forEach((r) => r.remove());
 
     try {
-      const retrieved = await copilotApi.retrieve(this.fundId, { question, top_k: 8 });
+      const retrieved = await copilotApi.retrieve(this.fundId, { query: question, top_k: 8 });
       const evidenceMap = new Map();
       for (const r of (retrieved?.results || retrieved?.hits || [])) {
         evidenceMap.set(String(r.chunk_id), r);

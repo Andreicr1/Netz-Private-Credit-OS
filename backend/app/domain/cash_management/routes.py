@@ -6,7 +6,7 @@ import io
 import uuid
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -871,10 +871,10 @@ def mark_exec(
 @router.post("/statements/upload")
 async def upload_statement(
     fund_id: uuid.UUID,
-    period_start: str,
-    period_end: str,
+    period_start: str = Form(...),
+    period_end: str = Form(...),
     file: UploadFile = File(...),
-    notes: str | None = None,
+    notes: str | None = Form(None),
     db: Session = Depends(get_db),
     actor=Depends(require_role(["COMPLIANCE", "GP", "ADMIN"])),
 ):
