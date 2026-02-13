@@ -2,12 +2,352 @@
   controllerName="netz.fund.os.pages.Dashboard"
   xmlns:mvc="sap.ui.core.mvc"
   xmlns="sap.m"
+  xmlns:f="sap.f"
+  xmlns:table="sap.ui.table"
+  xmlns:core="sap.ui.core"
 >
-  <Page title="Dashboard" showHeader="true">
+  <Page title="Overview" showHeader="true" busy="{dashboard>/busy}">
     <content>
-      <VBox class="sapUiSmallMargin">
-        <Title text="Governance Dashboard" level="H2" />
-        <Text text="Read-only overview. Workflows will be implemented in EPIC 5." />
+      <VBox class="netz-overview-root">
+        <MessageStrip
+          text="{dashboard>/errorMessage}"
+          type="Error"
+          showIcon="true"
+          visible="{= !!${dashboard>/errorMessage} }"
+        />
+
+        <Panel class="netz-overview-command-header" expandable="false" headerText="Overview.Command.Header">
+          <content>
+            <MessageStrip
+              text="{dashboard>/commandHeader/warningText}"
+              type="Warning"
+              showIcon="true"
+              visible="{dashboard>/commandHeader/warningVisible}"
+            />
+            <OverflowToolbar>
+              <Title text="{dashboard>/commandHeader/fund}" level="H4" />
+              <ToolbarSpacer />
+              <Text text="User: {dashboard>/commandHeader/user}" class="sapUiTinyMarginEnd" />
+              <ObjectStatus
+                text="{= 'Notifications: ' + ${dashboard>/commandHeader/notificationsCount} }"
+                state="Information"
+              />
+            </OverflowToolbar>
+            <HBox items="{dashboard>/commandHeader/globalActions}" wrap="Wrap" renderType="Bare" class="sapUiTinyMarginTop">
+              <items>
+                <Button text="{dashboard>label}" enabled="false" class="sapUiTinyMarginEnd" />
+              </items>
+            </HBox>
+            <Text text="As of: {dashboard>/commandHeader/asOf}" class="sapUiTinyMarginTop" />
+          </content>
+        </Panel>
+
+        <Panel class="netz-overview-command" expandable="false" headerText="Overview.Command.FilterBar">
+          <content>
+            <MessageStrip
+              text="{dashboard>/commandFilter/warningText}"
+              type="Warning"
+              showIcon="true"
+              visible="{dashboard>/commandFilter/warningVisible}"
+            />
+            <OverflowToolbar>
+              <Title text="{= ${dashboard>/fundId} ? ${dashboard>/fundId} : 'Missing fund scope' }" level="H5" />
+              <ToolbarSpacer />
+              <Select selectedKey="{dashboard>/filters/savedView}">
+                <items>
+                  <core:Item key="Standard" text="Standard" />
+                  <core:Item key="Compact" text="Compact" />
+                </items>
+              </Select>
+              <SearchField width="16rem" placeholder="Search" value="{dashboard>/filters/query}" search="onRefresh" />
+              <Button text="Refresh" type="Emphasized" press="onRefresh" />
+            </OverflowToolbar>
+            <HBox class="sapUiTinyMarginTop" renderType="Bare">
+              <Text text="As of: {dashboard>/commandFilter/asOf}" class="sapUiTinyMarginEnd" />
+              <Text text="Active filters: {dashboard>/filters/activeFiltersCount}" />
+            </HBox>
+          </content>
+        </Panel>
+
+        <Panel class="netz-overview-kpi-panel" expandable="false" headerText="Component.KpiStrip / layout=4col|6col">
+          <content>
+            <MessageStrip
+              text="{dashboard>/kpiStrip/warningText}"
+              type="Warning"
+              showIcon="true"
+              visible="{dashboard>/kpiStrip/warningVisible}"
+            />
+            <HBox items="{dashboard>/kpiStrip/kpis}" wrap="Wrap" renderType="Bare" class="netz-overview-kpi-strip">
+              <items>
+                <VBox class="netz-overview-kpi-item">
+                  <Title text="{dashboard>label}" level="H6" class="netz-token-heading-m" />
+                  <HBox renderType="Bare" class="sapUiTinyMarginTop">
+                    <Title text="{dashboard>value}" level="H3" class="netz-token-kpi-xl sapUiTinyMarginEnd" />
+                    <ObjectStatus text="{dashboard>delta}" state="{dashboard>deltaState}" />
+                  </HBox>
+                  <HBox renderType="Bare" class="sapUiTinyMarginTop">
+                    <Text text="{dashboard>unit}" class="netz-token-meta-text sapUiTinyMarginEnd" />
+                    <Link text="Details" enabled="false" />
+                  </HBox>
+                </VBox>
+              </items>
+            </HBox>
+            <Text text="As of: {dashboard>/kpiStrip/asOf}" class="sapUiTinyMarginTop" />
+          </content>
+        </Panel>
+
+        <Panel class="netz-overview-analytical" expandable="false" headerText="Analytical Layer">
+          <content>
+            <f:Card class="netz-overview-card sapUiTinyMarginBottom" width="100%">
+              <f:header>
+                <f:CardHeader title="Overview.Analytical.NavEvolution" subtitle="{dashboard>/navEvolution/asOf}" statusText="{dashboard>/navEvolution/statusText}" />
+              </f:header>
+              <f:content>
+                <VBox class="sapUiSmallMargin">
+                  <MessageStrip
+                    text="{dashboard>/navEvolution/warningText}"
+                    type="Warning"
+                    showIcon="true"
+                    visible="{dashboard>/navEvolution/warningVisible}"
+                  />
+                  <HBox renderType="Bare" class="sapUiTinyMarginTop">
+                    <VBox class="sapUiSmallMarginEnd">
+                      <Text text="Current NAV" class="netz-token-meta-text" />
+                      <Title text="{dashboard>/navEvolution/currentNav}" level="H3" class="netz-token-kpi-xl" />
+                    </VBox>
+                    <VBox class="sapUiSmallMarginEnd">
+                      <Text text="Previous NAV" class="netz-token-meta-text" />
+                      <Text text="{dashboard>/navEvolution/prevNav}" />
+                    </VBox>
+                    <VBox class="sapUiSmallMarginEnd">
+                      <Text text="Delta" class="netz-token-meta-text" />
+                      <ObjectStatus text="{dashboard>/navEvolution/deltaAbs}" state="{dashboard>/navEvolution/deltaState}" />
+                    </VBox>
+                    <VBox>
+                      <Text text="Delta %" class="netz-token-meta-text" />
+                      <Text text="{dashboard>/navEvolution/deltaPct}" />
+                    </VBox>
+                  </HBox>
+                  <List items="{dashboard>/navEvolution/series}" inset="false" class="sapUiTinyMarginTop">
+                    <CustomListItem>
+                      <HBox justifyContent="SpaceBetween" width="100%">
+                        <Text text="{dashboard>period_month}" />
+                        <Text text="{dashboard>nav_total_usd}" />
+                      </HBox>
+                    </CustomListItem>
+                  </List>
+                </VBox>
+              </f:content>
+            </f:Card>
+
+            <f:Card class="netz-overview-card sapUiTinyMarginBottom" width="100%">
+              <f:header>
+                <f:CardHeader title="Overview.Analytical.PipelineByStage" subtitle="{dashboard>/pipelineByStage/asOf}" statusText="{dashboard>/pipelineByStage/totalsLabel}" />
+              </f:header>
+              <f:content>
+                <VBox class="sapUiSmallMargin">
+                  <MessageStrip
+                    text="{dashboard>/pipelineByStage/warningText}"
+                    type="Warning"
+                    showIcon="true"
+                    visible="{dashboard>/pipelineByStage/warningVisible}"
+                  />
+                  <table:Table
+                    rows="{dashboard>/pipelineByStage/stages}"
+                    selectionMode="None"
+                    visibleRowCount="5"
+                    alternateRowColors="true"
+                  >
+                    <table:columns>
+                      <table:Column width="12rem"><Label text="Stage" /><table:template><Text text="{dashboard>stage}" /></table:template></table:Column>
+                      <table:Column width="6rem"><Label text="Count" /><table:template><Text text="{dashboard>count}" /></table:template></table:Column>
+                      <table:Column width="10rem"><Label text="Notional" /><table:template><Text text="{dashboard>notional}" /></table:template></table:Column>
+                      <table:Column width="8rem"><Label text="Delta" /><table:template><Text text="{dashboard>delta}" /></table:template></table:Column>
+                    </table:columns>
+                  </table:Table>
+                </VBox>
+              </f:content>
+            </f:Card>
+
+            <f:Card class="netz-overview-card" width="100%">
+              <f:header>
+                <f:CardHeader title="Overview.Analytical.RiskConcentration" subtitle="{dashboard>/riskConcentration/asOf}" statusText="Backend breachFlag rendering" />
+              </f:header>
+              <f:content>
+                <VBox class="sapUiSmallMargin">
+                  <MessageStrip
+                    text="{dashboard>/riskConcentration/warningText}"
+                    type="Warning"
+                    showIcon="true"
+                    visible="{dashboard>/riskConcentration/warningVisible}"
+                  />
+                  <table:Table
+                    rows="{dashboard>/riskConcentration/rows}"
+                    selectionMode="None"
+                    visibleRowCount="5"
+                    alternateRowColors="true"
+                  >
+                    <table:columns>
+                      <table:Column width="14rem"><Label text="Name" /><table:template><Text text="{dashboard>name}" /></table:template></table:Column>
+                      <table:Column width="10rem"><Label text="Exposure" /><table:template><Text text="{dashboard>exposure}" /></table:template></table:Column>
+                      <table:Column width="8rem"><Label text="%NAV" /><table:template><Text text="{dashboard>pctNav}" /></table:template></table:Column>
+                      <table:Column width="8rem"><Label text="Limit" /><table:template><Text text="{dashboard>limit}" /></table:template></table:Column>
+                      <table:Column width="8rem"><Label text="Status" /><table:template><ObjectStatus text="{dashboard>statusText}" state="{dashboard>statusState}" /></table:template></table:Column>
+                    </table:columns>
+                  </table:Table>
+                </VBox>
+              </f:content>
+            </f:Card>
+          </content>
+        </Panel>
+
+        <Panel class="netz-overview-operational" expandable="false" headerText="Operational Layer">
+          <content>
+            <f:Card class="netz-overview-card sapUiTinyMarginBottom" width="100%">
+              <f:header>
+                <f:CardHeader title="Overview.Table.ExecutionQueue" subtitle="{dashboard>/executionQueue/asOf}" statusText="{dashboard>/executionQueue/sortLabel}" />
+              </f:header>
+              <f:content>
+                <VBox class="sapUiSmallMargin">
+                  <MessageStrip
+                    text="{dashboard>/executionQueue/warningText}"
+                    type="Warning"
+                    showIcon="true"
+                    visible="{dashboard>/executionQueue/warningVisible}"
+                  />
+                  <table:Table rows="{dashboard>/executionQueue/rows}" selectionMode="None" visibleRowCount="6" alternateRowColors="true">
+                    <table:columns>
+                      <table:Column width="14rem"><Label text="Deal" /><table:template><Text text="{dashboard>deal}" /></table:template></table:Column>
+                      <table:Column width="10rem" visible="{= !${device>/system/phone} }"><Label text="Stage" /><table:template><Text text="{dashboard>stage}" /></table:template></table:Column>
+                      <table:Column width="10rem" visible="{= ${device>/system/desktop} }"><Label text="Owner" /><table:template><Text text="{dashboard>owner}" /></table:template></table:Column>
+                      <table:Column width="9rem"><Label text="SLA Due" /><table:template><Text text="{dashboard>slaDue}" /></table:template></table:Column>
+                      <table:Column width="8rem" visible="{= !${device>/system/phone} }"><Label text="Status" /><table:template><ObjectStatus text="{dashboard>status}" state="{dashboard>statusState}" /></table:template></table:Column>
+                      <table:Column width="8rem"><Label text="Priority" /><table:template><ObjectStatus text="{dashboard>priority}" state="{dashboard>priorityState}" /></table:template></table:Column>
+                    </table:columns>
+                  </table:Table>
+                </VBox>
+              </f:content>
+            </f:Card>
+
+            <f:Card class="netz-overview-card sapUiTinyMarginBottom" width="100%">
+              <f:header>
+                <f:CardHeader title="Overview.Table.ComplianceObligations" subtitle="{dashboard>/complianceObligations/asOf}" statusText="{dashboard>/complianceObligations/sortLabel}" />
+              </f:header>
+              <f:content>
+                <VBox class="sapUiSmallMargin">
+                  <MessageStrip
+                    text="{dashboard>/complianceObligations/warningText}"
+                    type="Warning"
+                    showIcon="true"
+                    visible="{dashboard>/complianceObligations/warningVisible}"
+                  />
+                  <table:Table rows="{dashboard>/complianceObligations/rows}" selectionMode="None" visibleRowCount="6" alternateRowColors="true">
+                    <table:columns>
+                      <table:Column width="16rem"><Label text="Obligation" /><table:template><Text text="{dashboard>obligation}" /></table:template></table:Column>
+                      <table:Column width="10rem" visible="{= !${device>/system/phone} }"><Label text="Type" /><table:template><Text text="{dashboard>type}" /></table:template></table:Column>
+                      <table:Column width="9rem"><Label text="Due Date" /><table:template><Text text="{dashboard>dueDate}" /></table:template></table:Column>
+                      <table:Column width="10rem" visible="{= !${device>/system/phone} }"><Label text="Workflow Status" /><table:template><ObjectStatus text="{dashboard>workflowStatus}" state="{dashboard>workflowState}" /></table:template></table:Column>
+                      <table:Column width="11rem"><Label text="Evidence Status" /><table:template><ObjectStatus text="{dashboard>evidenceStatus}" state="{dashboard>evidenceState}" /></table:template></table:Column>
+                      <table:Column width="10rem" visible="{= ${device>/system/desktop} }"><Label text="Owner" /><table:template><Text text="{dashboard>owner}" /></table:template></table:Column>
+                    </table:columns>
+                  </table:Table>
+                </VBox>
+              </f:content>
+            </f:Card>
+
+            <f:Card class="netz-overview-card" width="100%">
+              <f:header>
+                <f:CardHeader title="Overview.Table.CashExceptions" subtitle="{dashboard>/cashExceptions/asOf}" statusText="{dashboard>/cashExceptions/sortLabel}" />
+              </f:header>
+              <f:content>
+                <VBox class="sapUiSmallMargin">
+                  <MessageStrip
+                    text="{dashboard>/cashExceptions/warningText}"
+                    type="Warning"
+                    showIcon="true"
+                    visible="{dashboard>/cashExceptions/warningVisible}"
+                  />
+                  <table:Table rows="{dashboard>/cashExceptions/rows}" selectionMode="None" visibleRowCount="6" alternateRowColors="true">
+                    <table:columns>
+                      <table:Column width="11rem"><Label text="Tx ID" /><table:template><Text text="{dashboard>txId}" /></table:template></table:Column>
+                      <table:Column width="9rem" visible="{= !${device>/system/phone} }"><Label text="Date" /><table:template><Text text="{dashboard>date}" /></table:template></table:Column>
+                      <table:Column width="10rem"><Label text="Amount" /><table:template><Text text="{dashboard>amount}" /></table:template></table:Column>
+                      <table:Column width="13rem" visible="{= !${device>/system/phone} }"><Label text="Counterparty" /><table:template><Text text="{dashboard>counterparty}" /></table:template></table:Column>
+                      <table:Column width="10rem"><Label text="Match Status" /><table:template><ObjectStatus text="{dashboard>matchStatus}" state="{dashboard>matchState}" /></table:template></table:Column>
+                      <table:Column width="10rem"><Label text="Aging Bucket" /><table:template><Text text="{dashboard>agingBucket}" /></table:template></table:Column>
+                    </table:columns>
+                  </table:Table>
+                </VBox>
+              </f:content>
+            </f:Card>
+          </content>
+        </Panel>
+
+        <Panel class="netz-overview-monitoring" expandable="false" headerText="Monitoring Layer">
+          <content>
+            <f:Card class="netz-overview-card sapUiTinyMarginBottom" width="100%">
+              <f:header>
+                <f:CardHeader title="Overview.Monitoring.CriticalAlerts" subtitle="{dashboard>/criticalAlerts/asOf}" statusText="{dashboard>/criticalAlerts/statusText}" />
+              </f:header>
+              <f:content>
+                <VBox class="sapUiSmallMargin">
+                  <MessageStrip
+                    text="{dashboard>/criticalAlerts/warningText}"
+                    type="Warning"
+                    showIcon="true"
+                    visible="{dashboard>/criticalAlerts/warningVisible}"
+                  />
+                  <List items="{dashboard>/criticalAlerts/alerts}" inset="false" noDataText="No critical alerts.">
+                    <CustomListItem>
+                      <HBox justifyContent="SpaceBetween" alignItems="Center" width="100%">
+                        <VBox>
+                          <Text text="{dashboard>message}" />
+                          <Text text="{dashboard>alert_type}" class="netz-token-meta-text" />
+                        </VBox>
+                        <ObjectStatus text="{dashboard>severity}" state="{dashboard>severityState}" />
+                      </HBox>
+                    </CustomListItem>
+                  </List>
+                </VBox>
+              </f:content>
+            </f:Card>
+
+            <Panel class="netz-overview-card" expandable="false" headerText="Overview.Monitoring.GovernanceHealth">
+              <content>
+                <VBox class="sapUiSmallMargin">
+                  <MessageStrip
+                    text="{dashboard>/governanceHealth/warningText}"
+                    type="Warning"
+                    showIcon="true"
+                    visible="{dashboard>/governanceHealth/warningVisible}"
+                  />
+                  <HBox class="sapUiTinyMarginBottom" renderType="Bare">
+                    <Text text="As of: {dashboard>/governanceHealth/asOf}" class="sapUiTinyMarginEnd" />
+                    <Text text="{dashboard>/governanceHealth/statusText}" />
+                  </HBox>
+                  <Title text="Controls" level="H6" class="netz-token-heading-m" />
+                  <List items="{dashboard>/governanceHealth/controls}" inset="false" noDataText="No controls.">
+                    <CustomListItem>
+                      <HBox justifyContent="SpaceBetween" alignItems="Center" width="100%">
+                        <Text text="{dashboard>name}" />
+                        <ObjectStatus text="{dashboard>status}" state="{dashboard>statusState}" />
+                      </HBox>
+                    </CustomListItem>
+                  </List>
+                  <Title text="Exceptions" level="H6" class="netz-token-heading-m sapUiTinyMarginTop" />
+                  <List items="{dashboard>/governanceHealth/exceptions}" inset="false" noDataText="No exceptions.">
+                    <CustomListItem>
+                      <HBox justifyContent="SpaceBetween" alignItems="Center" width="100%">
+                        <Text text="{dashboard>name}" />
+                        <ObjectStatus text="{dashboard>status}" state="{dashboard>statusState}" />
+                      </HBox>
+                    </CustomListItem>
+                  </List>
+                </VBox>
+              </content>
+            </Panel>
+          </content>
+        </Panel>
       </VBox>
     </content>
   </Page>
