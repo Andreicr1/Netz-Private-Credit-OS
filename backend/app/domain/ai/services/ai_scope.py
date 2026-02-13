@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.core.config import settings
 from app.core.security.auth import Actor
 from app.shared.enums import Role
 
@@ -32,6 +33,8 @@ def scope_for_actor(actor: Actor) -> AIScope:
 
 
 def enforce_root_folder_scope(*, actor: Actor, requested_root_folder: str | None) -> None:
+    if settings.AUTHZ_BYPASS_ENABLED:
+        return
     scope = scope_for_actor(actor)
     if scope.allowed_root_folders is None:
         return
@@ -47,6 +50,8 @@ def filter_hits_by_scope(*, actor: Actor, hits: list[object], get_root_folder) -
     Post-filter search hits to avoid leaking cross-scope evidence.
     `get_root_folder(hit) -> str | None`
     """
+    if settings.AUTHZ_BYPASS_ENABLED:
+        return hits
     scope = scope_for_actor(actor)
     if scope.allowed_root_folders is None:
         return hits
