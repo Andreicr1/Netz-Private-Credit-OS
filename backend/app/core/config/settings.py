@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # Dev-only actor header
     dev_actor_header: str = "X-DEV-ACTOR"
 
+    # Temporary authorization bypass (use only until Entra RBAC is configured)
+    AUTHZ_BYPASS_ENABLED: bool = False
+
     # Azure Blob (canonical document repository)
     # Prefer canonical URL (Managed Identity via AAD). Example: https://<account>.blob.core.windows.net/
     STORAGE_ACCOUNT_URL: str | None = None
