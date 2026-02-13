@@ -138,85 +138,311 @@ body {
   padding: 1.25rem 0.5rem;
 }
 
-/* ── Executive Dashboard ── */
-.netz-dashboard-content {
+/* ── Executive Dashboard — Board-Level ── */
+.netz-board-content {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
-  padding: 1.5rem 2rem;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem 2rem;
 }
 
-.netz-kpi-row {
+/* Section titles (Capital, Risk, Deployment, Governance) */
+.netz-board-section-title {
+  padding: 1.25rem 0 0.25rem;
+  border-bottom: 1px solid var(--sapList_BorderColor);
+  margin-bottom: 0.25rem;
+}
+
+.netz-board-section-title ui5-title {
+  color: var(--sapTextColor);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  font-size: var(--sapFontSmallSize);
+}
+
+/* Board rows — asymmetric grids */
+.netz-board-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1.25rem;
+  gap: 1rem;
 }
 
-@media (max-width: 1024px) {
-  .netz-kpi-row {
-    grid-template-columns: repeat(2, 1fr);
+.netz-board-row-capital {
+  grid-template-columns: 2fr 1fr 1fr;
+}
+
+.netz-board-row-risk {
+  grid-template-columns: 1fr 1fr 2fr;
+}
+
+.netz-board-row-deploy {
+  grid-template-columns: 2fr 1fr 1fr;
+}
+
+.netz-board-row-gov {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+@media (max-width: 1200px) {
+  .netz-board-row-capital,
+  .netz-board-row-risk,
+  .netz-board-row-deploy {
+    grid-template-columns: 1fr 1fr;
+  }
+  .netz-board-row-gov {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
-@media (max-width: 600px) {
-  .netz-kpi-row {
+@media (max-width: 768px) {
+  .netz-board-row-capital,
+  .netz-board-row-risk,
+  .netz-board-row-deploy,
+  .netz-board-row-gov {
     grid-template-columns: 1fr;
   }
 }
 
-.netz-kpi-card {
+/* Page subtitle */
+.netz-board-page-subtitle {
+  color: var(--sapNeutralTextColor);
+  font-size: var(--sapFontSmallSize);
+  margin-left: 0.5rem;
+}
+
+/* ── Hero Card (NAV) ── */
+.netz-board-hero-card {
   min-width: 0;
 }
 
-.netz-kpi-body {
-  padding: 1.25rem 1.5rem 1.75rem;
+.netz-board-hero-body {
+  padding: 1rem 1.5rem 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.netz-kpi-value {
-  color: var(--sapTextColor);
-  font-size: 2rem;
-  letter-spacing: -0.02em;
+.netz-board-hero-main {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+  flex-wrap: wrap;
 }
 
-.netz-kpi-subtitle {
+.netz-board-hero-value {
+  color: var(--sapTextColor);
+  font-size: 2.25rem;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.netz-board-hero-delta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.netz-board-delta-positive {
+  color: var(--sapPositiveTextColor);
+  font-weight: 600;
+  font-size: var(--sapFontSize);
+}
+
+.netz-board-delta-negative {
+  color: var(--sapNegativeTextColor);
+  font-weight: 600;
+  font-size: var(--sapFontSize);
+}
+
+.netz-board-delta-label {
   color: var(--sapNeutralTextColor);
   font-size: var(--sapFontSmallSize);
 }
 
-.netz-section-divider {
-  padding-top: 0.5rem;
+.netz-board-hero-subtitle {
+  color: var(--sapNeutralTextColor);
+  font-size: var(--sapFontSmallSize);
 }
 
-.netz-queue-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.25rem;
-}
-
-@media (max-width: 1024px) {
-  .netz-queue-row {
-    grid-template-columns: 1fr;
-  }
-}
-
-.netz-queue-card {
+/* ── Metric Card (Cash Available, Utilization) ── */
+.netz-board-metric-card {
   min-width: 0;
 }
 
-.netz-queue-card ui5-list {
-  max-height: 20rem;
+.netz-board-metric-body {
+  padding: 1rem 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.netz-board-metric-value {
+  color: var(--sapTextColor);
+  font-size: 1.75rem;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.netz-board-metric-subtitle {
+  color: var(--sapNeutralTextColor);
+  font-size: var(--sapFontSmallSize);
+}
+
+.netz-board-metric-secondary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 0.75rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--sapList_BorderColor);
+}
+
+.netz-board-metric-sec-label {
+  color: var(--sapNeutralTextColor);
+  font-size: var(--sapFontSmallSize);
+}
+
+.netz-board-metric-sec-value {
+  font-weight: 600;
+  font-size: var(--sapFontSmallSize);
+}
+
+/* ── Breach Card ── */
+.netz-board-breach-card {
+  min-width: 0;
+}
+
+.netz-board-breach-body {
+  padding: 1rem 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.netz-board-breach-count {
+  font-size: 2.5rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.netz-board-breach-tags {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+/* ── List Card ── */
+.netz-board-list-card {
+  min-width: 0;
+}
+
+.netz-board-list-card ui5-list {
+  max-height: 18rem;
   overflow-y: auto;
 }
 
-.netz-queue-empty {
-  padding: 2rem 1.5rem;
-  color: var(--sapNeutralTextColor);
+/* ── Empty State (institutional) ── */
+.netz-board-empty-state {
+  padding: 1.75rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
   text-align: center;
-  font-size: var(--sapFontSize);
 }
+
+.netz-board-empty-icon {
+  color: var(--sapNeutralBorderColor);
+  width: 2rem;
+  height: 2rem;
+}
+
+.netz-board-empty-msg {
+  color: var(--sapNeutralTextColor);
+  font-size: var(--sapFontSize);
+  font-weight: 600;
+}
+
+.netz-board-empty-hint {
+  color: var(--sapNeutralTextColor);
+  font-size: var(--sapFontSmallSize);
+}
+
+/* ── Mini Table Card ── */
+.netz-board-table-card {
+  min-width: 0;
+}
+
+.netz-board-mini-table {
+  width: 100%;
+}
+
+.netz-board-mini-table ui5-table-header-cell {
+  font-weight: 600;
+  font-size: var(--sapFontSmallSize);
+}
+
+/* ── Pipeline Card ── */
+.netz-board-pipeline-card {
+  min-width: 0;
+}
+
+.netz-board-pipeline-body {
+  padding: 1rem 1.5rem 1.25rem;
+}
+
+.netz-board-pipeline-stages {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.netz-board-pipeline-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 4.5rem;
+}
+
+.netz-board-pipeline-count {
+  font-size: 1.75rem;
+  line-height: 1;
+  color: var(--sapTextColor);
+}
+
+.netz-board-pipeline-label {
+  color: var(--sapNeutralTextColor);
+  font-size: var(--sapFontSmallSize);
+  text-align: center;
+}
+
+.netz-board-pipeline-vol {
+  color: var(--sapInformativeTextColor);
+  font-size: var(--sapFontSmallSize);
+  font-weight: 600;
+}
+
+.netz-board-pipeline-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 0.75rem;
+  margin-top: 1rem;
+  border-top: 1px solid var(--sapList_BorderColor);
+}
+
+.netz-board-pipeline-total-label {
+  color: var(--sapNeutralTextColor);
+  font-size: var(--sapFontSmallSize);
+}
+
+.netz-board-pipeline-total-value {
+  color: var(--sapTextColor);
+}
+
+/* ── Legacy KPI/Queue (kept for backward compat) ── */
 
 /* ── Portfolio tables ── */
 .netz-portfolio-table {
