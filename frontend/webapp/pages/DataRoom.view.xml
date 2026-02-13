@@ -1,56 +1,246 @@
 <mvc:View
   controllerName="netz.fund.os.pages.DataRoom"
   xmlns:mvc="sap.ui.core.mvc"
+  xmlns:core="sap.ui.core"
   xmlns="sap.m"
+  xmlns:f="sap.f"
+  xmlns:layout="sap.ui.layout"
+  xmlns:table="sap.ui.table"
 >
-  <Page title="Data Room Registry" showHeader="true">
-    <content>
-      <VBox class="sapUiSmallMargin" width="100%">
-        <Toolbar>
-          <Title text="Documents" level="H3" />
-          <ToolbarSpacer />
-          <Button text="Refresh" type="Transparent" press="onRefresh" />
-        </Toolbar>
+  <f:DynamicPage id="dataRoomPage" fitContent="false" toggleHeaderOnTitleClick="false" busy="{= ${dataroom>/status} === 'loading' }">
+    <f:title>
+      <f:DynamicPageTitle>
+        <f:heading>
+          <Title text="Data Room" level="H2" />
+        </f:heading>
+        <f:actions>
+          <Button text="Upload" type="Emphasized" icon="sap-icon://upload" enabled="{dataroom>/permissions/canUpload}" press="onOpenUploadDialog" />
+          <Button text="Download" type="Transparent" icon="sap-icon://download" enabled="{= ${dataroom>/permissions/canDownload} &amp;&amp; !!${dataroom>/selectedDocument} }" press="onToolbarDownload" />
+          <Button text="Refresh" type="Transparent" icon="sap-icon://refresh" press="onRefresh" />
+        </f:actions>
+      </f:DynamicPageTitle>
+    </f:title>
 
+    <f:header>
+      <f:DynamicPageHeader>
+        <VBox width="100%" class="sapUiSmallMarginBottom">
+          <Breadcrumbs links="{dataroom>/breadcrumbs}">
+            <Link text="{dataroom>text}" press="onBreadcrumbPress" />
+          </Breadcrumbs>
+        </VBox>
+      </f:DynamicPageHeader>
+    </f:header>
+
+    <f:content>
+      <VBox class="netz-dataroom-sap-page" width="100%">
         <MessageStrip
-          text="{= ${dataroom>/status} === 'error' ? (${dataroom>/errorMessage} || 'Failed to load documents from backend.') : '' }"
+          text="{dataroom>/errorMessage}"
           type="Error"
           showIcon="true"
           visible="{= ${dataroom>/status} === 'error' }"
+          class="sapUiSmallMarginBottom"
         />
 
-        <Table id="docsTable" items="{dataroom>/items}" inset="false" width="100%">
-          <columns>
-            <Column>
-              <Text text="Root Folder" />
-            </Column>
-            <Column>
-              <Text text="Folder Path" />
-            </Column>
-            <Column>
-              <Text text="Title" />
-            </Column>
-            <Column>
-              <Text text="Updated At" />
-            </Column>
-            <Column>
-              <Text text="Domain" />
-            </Column>
-          </columns>
-          <items>
-            <ColumnListItem>
-              <cells>
-                <Text text="{dataroom>root_folder}" />
-                <Text text="{dataroom>folder_path}" />
-                <Text text="{dataroom>title}" />
-                <Text text="{dataroom>updated_at}" />
-                <Text text="{dataroom>domain}" />
-              </cells>
-            </ColumnListItem>
-          </items>
-        </Table>
+        <MessageStrip
+          text="{dataroom>/governanceMessage}"
+          type="Warning"
+          showIcon="true"
+          visible="{dataroom>/governanceWarningVisible}"
+          class="sapUiSmallMarginBottom"
+        />
+
+        <layout:Splitter id="dataRoomSplitter" orientation="Horizontal" height="calc(100vh - 14rem)">
+          <layout:contentAreas>
+            <Panel headerText="Folders" width="20%" class="netz-dataroom-pane">
+              <layoutData>
+                <layout:SplitterLayoutData size="20%" />
+              </layoutData>
+              <Tree
+                id="folderTree"
+                items="{path: 'dataroom>/folders', parameters: {arrayNames: ['children']}}"
+                mode="SingleSelectMaster"
+                selectionChange="onFolderSelectionChange"
+                class="netz-dataroom-tree"
+              >
+                <StandardTreeItem title="{dataroom>name}" type="Active" press="onFolderPress" />
+              </Tree>
+            </Panel>
+
+            <Panel headerText="Documents" width="55%" class="netz-dataroom-pane">
+              <layoutData>
+                <layout:SplitterLayoutData size="55%" />
+              </layoutData>
+              <table:TreeTable
+                id="documentsTreeTable"
+                rows="{path: 'dataroom>/tableRows', parameters: {arrayNames: ['children']}}"
+                selectionMode="Single"
+                visibleRowCountMode="Auto"
+                minAutoRowCount="8"
+                rowSelectionChange="onTableRowSelectionChange"
+              >
+                <table:columns>
+                  <table:Column width="20rem">
+                    <Label text="Name" />
+                    <table:template>
+                      <HBox alignItems="Center" renderType="Bare">
+                        <core:Icon src="{= ${dataroom>kind} === 'folder' ? 'sap-icon://folder' : 'sap-icon://document-text' }" class="sapUiTinyMarginEnd" />
+                        <Text text="{dataroom>name}" wrapping="false" />
+                      </HBox>
+                    </table:template>
+                  </table:Column>
+
+                  <table:Column width="10rem">
+                    <Label text="Type" />
+                    <table:template>
+                      <Text text="{dataroom>mimeType}" />
+                    </table:template>
+                  </table:Column>
+
+                  <table:Column width="12rem">
+                    <Label text="Last Modified" />
+                    <table:template>
+                      <Text text="{dataroom>lastModifiedLabel}" />
+                    </table:template>
+                  </table:Column>
+
+                  <table:Column width="8rem">
+                    <Label text="Size" />
+                    <table:template>
+                      <Text text="{dataroom>sizeLabel}" />
+                    </table:template>
+                  </table:Column>
+
+                  <table:Column width="10rem">
+                    <Label text="Access Scope" />
+                    <table:template>
+                      <ObjectStatus text="{dataroom>accessLabel}" state="Information" />
+                    </table:template>
+                  </table:Column>
+
+                  <table:Column width="11rem">
+                    <Label text="Actions" />
+                    <table:template>
+                      <HBox alignItems="Center" justifyContent="Start" renderType="Bare" class="sapUiTinyMarginTop sapUiTinyMarginBottom">
+                        <Button text="Open" type="Transparent" press="onOpenRow" class="sapUiTinyMarginEnd" />
+                        <Button text="Download" type="Transparent" press="onDownloadRow" enabled="{= ${dataroom>kind} === 'file' }" />
+                      </HBox>
+                    </table:template>
+                  </table:Column>
+                </table:columns>
+              </table:TreeTable>
+            </Panel>
+
+            <Panel headerText="Preview" width="25%" class="netz-dataroom-pane netz-dataroom-preview-pane">
+              <layoutData>
+                <layout:SplitterLayoutData size="25%" />
+              </layoutData>
+              <VBox width="100%" class="sapUiSmallMargin">
+                <Text text="Select a document to preview." visible="{= !${dataroom>/selectedDocument} }" />
+
+                <VBox visible="{= !!${dataroom>/selectedDocument} }" width="100%">
+                  <ObjectHeader title="{dataroom>/selectedDocument/name}" number="{dataroom>/selectedDocument/sizeLabel}" numberUnit="" class="sapUiTinyMarginBottom" />
+
+                  <ObjectStatus text="{dataroom>/selectedDocument/accessLabel}" state="Information" class="sapUiTinyMarginBottom" />
+
+                  <Label text="Full Path" />
+                  <Text text="{dataroom>/selectedDocument/path}" class="sapUiTinyMarginBottom" wrapping="true" />
+
+                  <Label text="MIME Type" />
+                  <Text text="{dataroom>/selectedDocument/mimeType}" class="sapUiTinyMarginBottom" />
+
+                  <Label text="Last Modified" />
+                  <Text text="{dataroom>/selectedDocument/lastModifiedLabel}" class="sapUiTinyMarginBottom" />
+
+                  <PDFViewer
+                    id="embeddedPdfViewer"
+                    source="{dataroom>/selectedDocument/signedViewUrl}"
+                    title="Document Preview"
+                    width="100%"
+                    height="24rem"
+                    showDownloadButton="false"
+                    visible="{= !!${dataroom>/selectedDocument/signedViewUrl} }"
+                    class="sapUiSmallMarginTop sapUiSmallMarginBottom"
+                  />
+
+                  <HBox class="sapUiSmallMarginTop">
+                    <Button text="Open in New Tab" type="Transparent" press="onOpenInNewTab" class="sapUiTinyMarginEnd" />
+                    <Button text="Download" type="Transparent" press="onToolbarDownload" enabled="{dataroom>/permissions/canDownload}" />
+                  </HBox>
+                </VBox>
+              </VBox>
+            </Panel>
+          </layout:contentAreas>
+        </layout:Splitter>
       </VBox>
-    </content>
-  </Page>
+    </f:content>
+  </f:DynamicPage>
+
+  <Dialog id="uploadDialog" title="Upload Document" contentWidth="36rem" contentHeight="26rem" draggable="true" resizable="true" stretchOnPhone="true">
+    <VBox class="sapUiSmallMargin" width="100%">
+      <MessageStrip text="Files are uploaded to the current folder path." type="Information" showIcon="true" class="sapUiSmallMarginBottom" />
+      <Label text="Current Folder" />
+      <Text text="{dataroom>/currentPathDisplay}" class="sapUiSmallMarginBottom" />
+
+      <UploadCollection
+        id="uploadCollection"
+        multiple="false"
+        instantUpload="false"
+        uploadEnabled="true"
+        sameFilenameAllowed="true"
+        mode="None"
+        fileType="pdf,doc,docx,xls,xlsx,ppt,pptx,png,jpg,jpeg"
+        change="onUploadSelectionChange"
+      />
+
+      <MessageStrip text="{dataroom>/upload/message}" type="{dataroom>/upload/messageType}" showIcon="true" visible="{= !!${dataroom>/upload/message} }" class="sapUiSmallMarginTop" />
+      <ProgressIndicator
+        percentValue="{dataroom>/upload/progressPercent}"
+        displayValue="{= ${dataroom>/upload/progressPercent} + '%' }"
+        showValue="true"
+        state="Information"
+        visible="{dataroom>/upload/progressVisible}"
+        class="sapUiSmallMarginTop"
+      />
+    </VBox>
+    <beginButton>
+      <Button text="Upload" type="Emphasized" press="onConfirmUpload" enabled="{= !!${dataroom>/upload/selectedFileName} &amp;&amp; !${dataroom>/upload/inProgress} }" />
+    </beginButton>
+    <endButton>
+      <Button text="Cancel" press="onCloseUploadDialog" enabled="{= !${dataroom>/upload/inProgress} }" />
+    </endButton>
+  </Dialog>
+
+  <Dialog id="previewDialog" title="Document Preview" contentWidth="72rem" contentHeight="42rem" draggable="true" resizable="true" stretchOnPhone="true">
+    <VBox width="100%" class="sapUiSmallMargin">
+      <ObjectHeader title="{dataroom>/selectedDocument/name}" number="{dataroom>/selectedDocument/sizeLabel}" numberUnit="" class="sapUiTinyMarginBottom" />
+      <ObjectStatus text="{dataroom>/selectedDocument/accessLabel}" state="Information" class="sapUiTinyMarginBottom" />
+
+      <Label text="Full Path" />
+      <Text text="{dataroom>/selectedDocument/path}" class="sapUiTinyMarginBottom" wrapping="true" />
+
+      <Label text="MIME Type" />
+      <Text text="{dataroom>/selectedDocument/mimeType}" class="sapUiTinyMarginBottom" />
+
+      <Label text="Last Modified" />
+      <Text text="{dataroom>/selectedDocument/lastModifiedLabel}" class="sapUiTinyMarginBottom" />
+
+      <PDFViewer
+        id="dialogPdfViewer"
+        source="{dataroom>/selectedDocument/signedViewUrl}"
+        title="Document Preview"
+        width="100%"
+        height="28rem"
+        showDownloadButton="false"
+        visible="{= !!${dataroom>/selectedDocument/signedViewUrl} }"
+        class="sapUiSmallMarginTop sapUiSmallMarginBottom"
+      />
+    </VBox>
+    <beginButton>
+      <Button text="Open in New Tab" type="Transparent" press="onOpenInNewTab" />
+    </beginButton>
+    <endButton>
+      <Button text="Close" press="onClosePreviewDialog" />
+    </endButton>
+  </Dialog>
 </mvc:View>
 

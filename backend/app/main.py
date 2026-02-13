@@ -64,7 +64,7 @@ from app.domain.reporting.routes.report_packs import router as report_packs_rout
 from app.domain.reporting.routes.investor_portal import router as investor_portal_router
 from app.domain.reporting.routes.evidence_pack import router as evidence_pack_router
 from app.domain.reporting.routes.reports import router as reports_router
-from app.domain.dataroom.routes import router as dataroom_router
+from app.domain.dataroom.routes import data_room_router, router as dataroom_router
 from app.domain.cash_management.routes import router as cash_router
 
 
@@ -184,6 +184,7 @@ def create_app() -> FastAPI:
     app.include_router(evidence_pack_router)
     app.include_router(reports_router)
     app.include_router(dataroom_router)
+    app.include_router(data_room_router)
     app.include_router(cash_router)
 
     # /api aliases for all domain routers.

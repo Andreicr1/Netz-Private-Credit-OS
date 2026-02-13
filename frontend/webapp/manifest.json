@@ -31,6 +31,7 @@
         "sap.m": {},
         "sap.f": {},
         "sap.ui.core": {},
+        "sap.ui.table": {},
         "sap.ui.layout": {},
         "sap.ui.unified": {},
         "sap.uxap": {}

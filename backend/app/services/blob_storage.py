@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime, timedelta, timezone
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import quote
 
 from azure.core.exceptions import ResourceExistsError
 from azure.identity import DefaultAzureCredential
-from azure.storage.blob import BlobClient, BlobServiceClient, ContentSettings
+from azure.storage.blob import BlobClient, BlobSasPermissions, BlobServiceClient, ContentSettings, generate_blob_sas
 
 from app.core.config import settings
 from app.shared.enums import Env
@@ -295,4 +297,46 @@ def list_blobs(
             ))
 
     return entries
+
+
+def generate_read_link(
+    *,
+    container: str,
+    blob_name: str,
+    ttl_minutes: int | None = None,
+    as_download: bool = False,
+) -> str:
+    """
+    Generate a time-limited read link for a blob.
+    Uses user delegation SAS in Azure and local URI passthrough in local mode.
+    """
+    if _use_local_storage():
+        return blob_uri(container, blob_name)
+
+    svc = _service_client()
+    ttl = int(ttl_minutes or settings.AZURE_STORAGE_SAS_TTL_MINUTES or 30)
+    now = datetime.now(timezone.utc)
+    start = now - timedelta(minutes=2)
+    expiry = now + timedelta(minutes=ttl)
+
+    user_delegation_key = svc.get_user_delegation_key(key_start_time=start, key_expiry_time=expiry)
+
+    content_disposition = None
+    if as_download:
+        filename = Path(blob_name).name or "document"
+        content_disposition = f'attachment; filename="{filename}"'
+
+    sas = generate_blob_sas(
+        account_name=svc.account_name,
+        container_name=container,
+        blob_name=blob_name,
+        user_delegation_key=user_delegation_key,
+        permission=BlobSasPermissions(read=True),
+        start=start,
+        expiry=expiry,
+        content_disposition=content_disposition,
+    )
+
+    safe_blob_name = quote(blob_name, safe="/")
+    return f"{_account_url()}/{container}/{safe_blob_name}?{sas}"
 

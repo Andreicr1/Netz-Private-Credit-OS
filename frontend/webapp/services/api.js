@@ -83,6 +83,12 @@ sap.ui.define([], function () {
     return fetchJson(url, { method: "POST", body: bodyObj || {} });
   }
 
+  function postForm(url, formData) {
+    var client = getClient();
+    var path = client.toApiPathFromUrl(url);
+    return client.apiPostForm(path, formData);
+  }
+
   function fetchDocuments(fundId) {
     var url = BASE_URL + "/funds/" + encodeURIComponent(fundId) + "/documents";
     return fetchJson(url, { method: "GET" });
@@ -175,6 +181,7 @@ sap.ui.define([], function () {
     downloadJson: downloadJson,
     fetchJson: fetchJson,
     postJson: postJson,
+    postForm: postForm,
     fetchDocuments: fetchDocuments
     ,
     getComplianceMe: getComplianceMe,
