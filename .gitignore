@@ -79,3 +79,14 @@ Thumbs.db
 .idea/
 
 .env
+
+# Governance transient artifacts
+*_smoke_report.json
+*_validation_report.json
+ttl1_*.json
+*_monitor_log.json
+*_probe_log.json
+
+# Temporary runbooks / staging monitors (se aplicável)
+TTL1_STAGING_MONITOR_RUNBOOK.md
+DEPLOY_STAGING_DR_ROUTES_TASK.md
