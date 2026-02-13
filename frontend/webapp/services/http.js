@@ -1,127 +1,59 @@
-import { getDevActorHeaderValue } from "./env.js";
+import {
+  apiDelete,
+  apiGet,
+  apiPatch,
+  apiPost,
+  apiPostForm,
+  buildHttpError as buildClientHttpError,
+  toApiPathFromUrl,
+} from "./apiClient.js";
 
-let cachedPrincipalHeadersPromise = null;
-
-function isStaticWebAppsHost() {
-  try {
-    const host = (window.location && window.location.hostname) || "";
-    return host.includes("azurestaticapps.net");
-  } catch {
-    return false;
-  }
-}
-
-function getClientPrincipal(payload) {
-  if (Array.isArray(payload)) {
-    if (payload.length === 0) return null;
-    return payload[0] && payload[0].clientPrincipal ? payload[0].clientPrincipal : null;
-  }
-  return payload && payload.clientPrincipal ? payload.clientPrincipal : null;
-}
-
-async function getSwaClientPrincipalHeaders() {
-  if (!isStaticWebAppsHost()) {
+function parseJsonBody(input) {
+  if (typeof input === "undefined" || input === null || input === "") {
     return {};
   }
-
-  if (!cachedPrincipalHeadersPromise) {
-    cachedPrincipalHeadersPromise = fetch("/.auth/me", { method: "GET", credentials: "include" })
-      .then(async (res) => {
-        if (!res.ok) {
-          return {};
-        }
-        const payload = await res.json();
-        const principal = getClientPrincipal(payload);
-        if (!principal) {
-          return {};
-        }
-        const headers = {};
-        if (principal.userId) {
-          headers["X-NETZ-PRINCIPAL-ID"] = String(principal.userId);
-        }
-        if (principal.userDetails) {
-          headers["X-NETZ-PRINCIPAL-NAME"] = String(principal.userDetails);
-        }
-        return headers;
-      })
-      .catch(() => ({}));
+  if (typeof input === "string") {
+    try {
+      return JSON.parse(input);
+    } catch {
+      return { raw: input };
+    }
   }
-
-  return cachedPrincipalHeadersPromise;
+  return input;
 }
 
 export function buildHttpError(res, url, detailText) {
-  const err = new Error(`HTTP ${res.status} ${res.statusText} for ${url}${detailText ? ` — ${detailText}` : ""}`);
-  err.status = res.status;
-  err.url = url;
-  err.detail = detailText;
-  return err;
+  return buildClientHttpError(res.status, res.statusText, url, detailText);
 }
 
 export async function fetchJson(url, options = {}) {
-  const devActor = getDevActorHeaderValue();
-  const principalHeaders = await getSwaClientPrincipalHeaders();
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      Accept: "application/json",
-      ...(devActor ? { "X-DEV-ACTOR": devActor } : {}),
-      ...(principalHeaders || {}),
-      ...(options.headers || {}),
-    },
-  });
+  const method = String(options.method || "GET").toUpperCase();
+  const path = toApiPathFromUrl(url);
 
-  const text = await res.text();
-  let body = null;
-  if (text) {
-    try {
-      body = JSON.parse(text);
-    } catch {
-      body = { message: text };
-    }
+  if (method === "GET") {
+    return apiGet(path);
+  }
+  if (method === "POST") {
+    return apiPost(path, parseJsonBody(options.body));
+  }
+  if (method === "PATCH") {
+    return apiPatch(path, parseJsonBody(options.body));
+  }
+  if (method === "DELETE") {
+    return apiDelete(path, parseJsonBody(options.body));
   }
 
-  if (!res.ok) {
-    const detail = body && (body.detail || body.message) ? (body.detail || body.message) : null;
-    throw buildHttpError(res, url, detail ? String(detail) : null);
-  }
-
-  return body;
+  throw new Error(`Unsupported HTTP method in fetchJson: ${method}`);
 }
 
 export function postJson(url, payload) {
-  return fetchJson(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload ?? {}),
-  });
+  const path = toApiPathFromUrl(url);
+  return apiPost(path, payload ?? {});
 }
 
-export async function postForm(url, formData) {
-  const devActor = getDevActorHeaderValue();
-  const principalHeaders = await getSwaClientPrincipalHeaders();
-  const res = await fetch(url, {
-    method: "POST",
-    body: formData,
-    headers: {
-      ...(devActor ? { "X-DEV-ACTOR": devActor } : {}),
-      ...(principalHeaders || {}),
-    },
-  });
-  const text = await res.text();
-  let body = null;
-  if (text) {
-    try {
-      body = JSON.parse(text);
-    } catch {
-      body = { message: text };
-    }
-  }
-  if (!res.ok) {
-    const detail = body && (body.detail || body.message) ? (body.detail || body.message) : null;
-    throw buildHttpError(res, url, detail ? String(detail) : null);
-  }
-  return body;
+export function postForm(url, formData) {
+  const path = toApiPathFromUrl(url);
+  return apiPostForm(path, formData);
 }
 
 export function downloadJson(filename, obj) {

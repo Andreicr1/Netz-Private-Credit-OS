@@ -36,64 +36,56 @@ sap.ui.define([], function () {
     URL.revokeObjectURL(url);
   }
 
-  function assertOk(res, url) {
-    if (res.ok) {
-      return;
+  function getClient() {
+    if (typeof window === "undefined" || !window.__NETZ_API_CLIENT__) {
+      throw new Error("HTTP client unavailable: services/apiClient.js was not loaded.");
     }
-    var err = new Error("HTTP " + res.status + " " + res.statusText + " for " + url);
-    err.status = res.status;
-    throw err;
+    return window.__NETZ_API_CLIENT__;
+  }
+
+  function parseBody(body) {
+    if (typeof body === "undefined" || body === null || body === "") {
+      return {};
+    }
+    if (typeof body === "string") {
+      try {
+        return JSON.parse(body);
+      } catch (e) {
+        return { raw: body };
+      }
+    }
+    return body;
   }
 
   function fetchJson(url, opts) {
     var options = opts || {};
-    options.headers = options.headers || {};
-    options.headers["Accept"] = "application/json";
+    var method = String(options.method || "GET").toUpperCase();
+    var client = getClient();
+    var path = client.toApiPathFromUrl(url);
 
-    return fetch(url, options).then(function (res) {
-      if (res.ok) {
-        return res.json();
-      }
+    if (method === "GET") {
+      return client.apiGet(path);
+    }
+    if (method === "POST") {
+      return client.apiPost(path, parseBody(options.body));
+    }
+    if (method === "PATCH") {
+      return client.apiPatch(path, parseBody(options.body));
+    }
+    if (method === "DELETE") {
+      return client.apiDelete(path, parseBody(options.body));
+    }
 
-      // Try to extract FastAPI-style detail when possible.
-      return res.text().then(function (txt) {
-        var detail = txt;
-        try {
-          var parsed = JSON.parse(txt);
-          if (parsed && parsed.detail) {
-            detail = typeof parsed.detail === "string" ? parsed.detail : JSON.stringify(parsed.detail);
-          }
-        } catch (e) {
-          // keep txt
-        }
-        var err = new Error("HTTP " + res.status + " " + res.statusText + " for " + url + (detail ? (" — " + detail) : ""));
-        err.status = res.status;
-        throw err;
-      });
-    });
+    throw new Error("Unsupported HTTP method in services/api.js: " + method);
   }
 
   function postJson(url, bodyObj) {
-    return fetchJson(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: typeof bodyObj === "undefined" ? null : JSON.stringify(bodyObj)
-    });
+    return fetchJson(url, { method: "POST", body: bodyObj || {} });
   }
 
   function fetchDocuments(fundId) {
     var url = BASE_URL + "/funds/" + encodeURIComponent(fundId) + "/documents";
-    return fetch(url, {
-      method: "GET",
-      headers: {
-        "Accept": "application/json"
-      }
-    }).then(function (res) {
-      assertOk(res, url);
-      return res.json();
-    });
+    return fetchJson(url, { method: "GET" });
   }
 
   function getComplianceMe(fundId) {
@@ -191,6 +183,10 @@ sap.ui.define([], function () {
     signRequest: signRequest,
     rejectRequest: rejectRequest,
     exportExecutionPack: exportExecutionPack
+    ,
+    ensureAuthenticated: function () {
+      return getClient().ensureAuthenticated();
+    }
   };
 });
 

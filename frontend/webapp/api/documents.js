@@ -10,6 +10,16 @@ export function listDocuments(fundId, params = {}) {
   return fetchJson(url, { method: "GET" });
 }
 
+export function getDocumentById(fundId, documentId) {
+  const url = `${getApiBaseUrl()}/funds/${encodeURIComponent(fundId)}/documents/${encodeURIComponent(documentId)}`;
+  return fetchJson(url, { method: "GET" });
+}
+
+export function listDocumentVersions(fundId, documentId) {
+  const url = `${getApiBaseUrl()}/funds/${encodeURIComponent(fundId)}/documents/${encodeURIComponent(documentId)}/versions`;
+  return fetchJson(url, { method: "GET" });
+}
+
 export function listRootFolders(fundId) {
   const url = `${getApiBaseUrl()}/funds/${encodeURIComponent(fundId)}/documents/root-folders`;
   return fetchJson(url, { method: "GET" });
@@ -39,4 +49,19 @@ export function uploadPdf(fundId, params) {
   form.append("title", params.title || "");
   form.append("file", file, fileName || "document.pdf");
   return postForm(url, form);
+}
+
+export function processPendingIngestion(fundId) {
+  const url = `${getApiBaseUrl()}/funds/${encodeURIComponent(fundId)}/documents/ingestion/process-pending`;
+  return postJson(url, {});
+}
+
+export function createDocument(fundId, payload = {}) {
+  const url = `${getApiBaseUrl()}/funds/${encodeURIComponent(fundId)}/documents`;
+  return postJson(url, payload);
+}
+
+export function createDocumentVersion(fundId, documentId, payload = {}) {
+  const url = `${getApiBaseUrl()}/funds/${encodeURIComponent(fundId)}/documents/${encodeURIComponent(documentId)}/versions`;
+  return postJson(url, payload);
 }

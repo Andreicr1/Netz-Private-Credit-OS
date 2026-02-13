@@ -8,12 +8,101 @@
 
 ## Table of Contents
 
+0. [Wave Implementation Status (Current)](#0-wave-implementation-status-current)
 1. [Backend Overview](#1-backend-overview)
 2. [Frontend Overview](#2-frontend-overview)
 3. [Integration Matrix](#3-integration-matrix)
 4. [Infrastructure Findings](#4-infrastructure-findings)
 5. [Critical Issues](#5-critical-issues)
 6. [Recommendations](#6-recommendations)
+
+---
+
+## 0. Wave Implementation Status (Current)
+
+Canonical coverage source for execution tracking: **this file (`ENDPOINT_AUDIT_REPORT.md`)**.
+
+### Wave 0 — Architecture Stabilization
+
+- ✅ Single frontend HTTP client flow preserved (`apiClient` + `services/http.js` delegation)
+- ✅ No APIM base URL references in `frontend/webapp/**`
+- ✅ No direct `fetch(` outside `services/ApiClient.js`
+
+### Wave 1 — Portfolio + Deals Pipeline
+
+- ✅ `frontend/webapp/api/portfolio.js` expanded and in use
+- ✅ `frontend/webapp/api/deals.js` expanded and in use
+- ✅ Placeholder pages integrated in shell routing
+
+### Wave 2 — Compliance + Actions
+
+- ✅ `frontend/webapp/api/compliance.js` and `frontend/webapp/api/actions.js` expanded with explicit wrappers
+- ✅ Placeholder pages integrated in shell routing
+
+### Wave 3 — Cash Management
+
+- ✅ `frontend/webapp/api/cash.js` complete coverage of cash transitions/reconciliation/statements
+- ✅ `frontend/webapp/pages/CashManagementPage.js` active and calling real endpoints
+
+### Wave 4 — Documents + Dataroom + Reporting + AI + Signatures
+
+- ✅ API modules expanded/added:
+  - `frontend/webapp/api/documents.js`
+  - `frontend/webapp/api/dataroom.js`
+  - `frontend/webapp/api/reporting.js`
+  - `frontend/webapp/api/ai.js`
+  - `frontend/webapp/api/signatures.js`
+- ✅ Compatibility preserved for existing AI consumers via `frontend/webapp/api/copilot.js` delegation
+- ✅ New placeholder pages integrated:
+  - `frontend/webapp/pages/DocumentsPage.js`
+  - `frontend/webapp/pages/DataroomPage.js`
+  - `frontend/webapp/pages/ReportingPage.js`
+  - `frontend/webapp/pages/AiPage.js`
+  - `frontend/webapp/pages/SignaturesPage.js`
+- ✅ Routes/navigation updated in:
+  - `frontend/webapp/layout/AppShell.js`
+  - `frontend/webapp/layout/SideNavigation.js`
+
+Wave 4 endpoint wrappers now mapped:
+
+| Domain | Method | Backend Path | Frontend Function |
+|--------|--------|--------------|-------------------|
+| Documents | GET | `/api/funds/{fund_id}/documents` | `listDocuments` |
+| Documents | GET | `/api/funds/{fund_id}/documents/root-folders` | `listRootFolders` |
+| Documents | POST | `/api/funds/{fund_id}/documents/root-folders` | `createRootFolder` |
+| Documents | POST | `/api/funds/{fund_id}/documents/upload` | `uploadPdf` |
+| Documents | GET | `/api/funds/{fund_id}/documents/{document_id}` | `getDocumentById` |
+| Documents | GET | `/api/funds/{fund_id}/documents/{document_id}/versions` | `listDocumentVersions` |
+| Documents | POST | `/api/funds/{fund_id}/documents/ingestion/process-pending` | `processPendingIngestion` |
+| Documents | POST | `/api/funds/{fund_id}/documents` | `createDocument` |
+| Documents | POST | `/api/funds/{fund_id}/documents/{document_id}/versions` | `createDocumentVersion` |
+| Dataroom | POST | `/api/dataroom/documents` | `uploadDataroomDocument` |
+| Dataroom | POST | `/api/dataroom/documents/{document_id}/ingest` | `ingestDataroomDocument` |
+| Dataroom | GET | `/api/dataroom/search` | `searchDataroom` |
+| Reporting | GET | `/api/funds/{fund_id}/reports/nav/snapshots` | `listNavSnapshots` |
+| Reporting | POST | `/api/funds/{fund_id}/reports/nav/snapshots` | `createNavSnapshot` |
+| Reporting | GET | `/api/funds/{fund_id}/reports/nav/snapshots/{snapshot_id}` | `getNavSnapshotById` |
+| Reporting | POST | `/api/funds/{fund_id}/reports/nav/snapshots/{snapshot_id}/finalize` | `finalizeNavSnapshot` |
+| Reporting | POST | `/api/funds/{fund_id}/reports/nav/snapshots/{snapshot_id}/publish` | `publishNavSnapshot` |
+| Reporting | POST | `/api/funds/{fund_id}/reports/nav/snapshots/{snapshot_id}/assets` | `recordAssetValuationSnapshot` |
+| Reporting | POST | `/api/funds/{fund_id}/reports/evidence-pack` | `exportEvidencePack` |
+| Reporting | POST | `/api/funds/{fund_id}/reports/monthly-pack/generate` | `generateMonthlyPack` |
+| Reporting | GET | `/api/funds/{fund_id}/reports/monthly-pack/list` | `listMonthlyPacks` |
+| Reporting | GET | `/api/funds/{fund_id}/reports/monthly-pack/{pack_id}/download` | `downloadMonthlyPack` |
+| Reporting | POST | `/api/funds/{fund_id}/reports/investor-statements/generate` | `generateInvestorStatement` |
+| Reporting | GET | `/api/funds/{fund_id}/reports/investor-statements` | `listInvestorStatements` |
+| Reporting | GET | `/api/funds/{fund_id}/reports/investor-statements/{statement_id}/download` | `downloadInvestorStatement` |
+| Reporting | GET | `/api/funds/{fund_id}/reports/archive` | `getReportingArchive` |
+| AI | GET | `/api/funds/{fund_id}/ai/activity` | `listAIActivity` |
+| AI | POST | `/api/funds/{fund_id}/ai/query` | `createAIQuery` |
+| AI | GET | `/api/funds/{fund_id}/ai/history` | `listAIHistory` |
+| AI | POST | `/api/funds/{fund_id}/ai/retrieve` | `retrieveAIContext` |
+| AI | POST | `/api/funds/{fund_id}/ai/answer` | `answerAIQuestion` |
+| Signatures | GET | `/api/funds/{fund_id}/signatures` | `listSignatureRequests` |
+| Signatures | GET | `/api/funds/{fund_id}/signatures/{request_id}` | `getSignatureRequest` |
+| Signatures | POST | `/api/funds/{fund_id}/signatures/{request_id}/sign` | `signSignatureRequest` |
+| Signatures | POST | `/api/funds/{fund_id}/signatures/{request_id}/reject` | `rejectSignatureRequest` |
+| Signatures | POST | `/api/funds/{fund_id}/signatures/{request_id}/execution-pack` | `exportExecutionPack` |
 
 ---
 
