@@ -12,11 +12,26 @@ export class SideNavigation {
 
     [
       { label: "Dashboard", route: "/dashboard", icon: "home" },
-      { label: "Data Room", route: "/data-room", icon: "folder" },
+      { label: "Portfolio", route: "/portfolio", icon: "folder" },
+      { label: "Deals Pipeline", route: "/deals", icon: "pie-chart" },
+      { label: "Documents", route: "/documents", icon: "documents" },
+      { label: "Dataroom", route: "/dataroom", icon: "folder" },
       { label: "Cash Management", route: "/cash", icon: "wallet" },
       { label: "Compliance", route: "/compliance", icon: "shield" },
-      { label: "Fund Copilot", route: "/copilot", icon: "ai" },
-      { label: "Reporting", route: "/reporting", icon: "pie-chart" }
+      { label: "Actions", route: "/actions", icon: "sys-enter-2" },
+      { label: "AI", route: "/ai", icon: "ai" },
+      { label: "Reporting", route: "/reporting", icon: "pie-chart" },
+      { label: "Signatures", route: "/signatures", icon: "edit" },
+      { label: "Assets", route: "/assets", icon: "product" },
+      { label: "Alerts", route: "/alerts", icon: "alert" },
+      { label: "Portfolio Actions", route: "/portfolio-actions", icon: "action" },
+      { label: "Fund Investment", route: "/fund-investment", icon: "add-equipment" },
+      { label: "Asset Obligations", route: "/asset-obligations", icon: "receipt" },
+      { label: "Evidence", route: "/evidence", icon: "document-text" },
+      { label: "Auditor Evidence", route: "/auditor-evidence", icon: "inspection" },
+      { label: "Report Packs", route: "/report-packs", icon: "business-card" },
+      { label: "Investor Portal", route: "/investor-portal", icon: "customer" },
+      { label: "NAV Assets", route: "/nav-assets", icon: "table-chart" }
     ].forEach((it) => {
       const navItem = document.createElement("ui5-side-navigation-item");
       navItem.text = it.label;

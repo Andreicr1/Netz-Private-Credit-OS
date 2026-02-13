@@ -1,12 +1,28 @@
 import { getFundIdFromQuery } from "../services/env.js";
+import { ensureAuthenticated } from "../services/apiClient.js";
 import { SideNavigation } from "./SideNavigation.js";
 
 import { DashboardPage } from "../pages/Dashboard.js";
-import { DataRoomPage } from "../pages/DataRoom.js";
-import { CashManagementPage } from "../pages/CashManagement.js";
-import { CompliancePage } from "../pages/Compliance.js";
-import { FundCopilotPage } from "../pages/FundCopilot.js";
-import { ReportingPage } from "../pages/Reporting.js";
+import { DocumentsPage } from "../pages/DocumentsPage.js";
+import { DataroomPage } from "../pages/DataroomPage.js";
+import { CashManagementPage } from "../pages/CashManagementPage.js";
+import { CompliancePage } from "../pages/CompliancePage.js";
+import { ActionsPage } from "../pages/ActionsPage.js";
+import { AiPage } from "../pages/AiPage.js";
+import { ReportingPage } from "../pages/ReportingPage.js";
+import { PortfolioPage } from "../pages/PortfolioPage.js";
+import { DealsPipelinePage } from "../pages/DealsPipelinePage.js";
+import { SignaturesPage } from "../pages/SignaturesPage.js";
+import { AssetsPage } from "../pages/AssetsPage.js";
+import { AlertsPage } from "../pages/AlertsPage.js";
+import { PortfolioActionsPage } from "../pages/PortfolioActionsPage.js";
+import { FundInvestmentPage } from "../pages/FundInvestmentPage.js";
+import { AssetObligationsPage } from "../pages/AssetObligationsPage.js";
+import { EvidencePage } from "../pages/EvidencePage.js";
+import { AuditorEvidencePage } from "../pages/AuditorEvidencePage.js";
+import { ReportPacksLegacyPage } from "../pages/ReportPacksLegacyPage.js";
+import { InvestorPortalPage } from "../pages/InvestorPortalPage.js";
+import { NavAssetsPage } from "../pages/NavAssetsPage.js";
 import { SignatureDetailView } from "../workflows/SignatureDetailView.js";
 
 function normalizePath(pathname) {
@@ -17,43 +33,6 @@ function normalizePath(pathname) {
 function matchSignatureDetail(pathname) {
   const m = pathname.match(/^\/cash\/signature\/([^/]+)$/);
   return m ? { transferId: decodeURIComponent(m[1]) } : null;
-}
-
-function isStaticWebAppsHost() {
-  try {
-    const host = (window.location && window.location.hostname) || "";
-    return host.includes("azurestaticapps.net");
-  } catch (e) {
-    return false;
-  }
-}
-
-function getClientPrincipal(payload) {
-  if (Array.isArray(payload)) {
-    if (payload.length === 0) return null;
-    return payload[0] && payload[0].clientPrincipal ? payload[0].clientPrincipal : null;
-  }
-  return payload && payload.clientPrincipal ? payload.clientPrincipal : null;
-}
-
-async function ensureAuthenticated() {
-  if (!isStaticWebAppsHost()) {
-    return true;
-  }
-
-  try {
-    const res = await fetch("/.auth/me", { method: "GET", credentials: "include" });
-    const payload = res.ok ? await res.json() : null;
-    const principal = getClientPrincipal(payload);
-    if (principal) {
-      return true;
-    }
-  } catch (e) {
-  }
-
-  const currentPath = `${window.location.pathname || "/"}${window.location.search || ""}${window.location.hash || ""}`;
-  window.location.replace(`/.auth/login/aad?post_login_redirect_uri=${encodeURIComponent(currentPath)}`);
-  return false;
 }
 
 export class AppShell {
@@ -129,7 +108,29 @@ export class AppShell {
 
   _renderCurrentRoute() {
     const pathname = normalizePath(window.location.pathname);
-    const moduleRoutes = ["/dashboard", "/data-room", "/cash", "/compliance", "/copilot", "/reporting"];
+    const moduleRoutes = [
+      "/dashboard",
+      "/portfolio",
+      "/deals",
+      "/documents",
+      "/dataroom",
+      "/cash",
+      "/compliance",
+      "/actions",
+      "/ai",
+      "/reporting",
+      "/signatures",
+      "/assets",
+      "/alerts",
+      "/portfolio-actions",
+      "/fund-investment",
+      "/asset-obligations",
+      "/evidence",
+      "/auditor-evidence",
+      "/report-packs",
+      "/investor-portal",
+      "/nav-assets",
+    ];
 
     if (moduleRoutes.includes(pathname)) {
       this._nav.setSelectedRoute(pathname);
@@ -145,8 +146,18 @@ export class AppShell {
       case "/dashboard":
         this._renderPage(new DashboardPage({ fundId: this._fundId }));
         break;
+      case "/portfolio":
+        this._renderPage(new PortfolioPage({ fundId: this._fundId }));
+        break;
+      case "/deals":
+        this._renderPage(new DealsPipelinePage({ fundId: this._fundId }));
+        break;
+      case "/documents":
+        this._renderPage(new DocumentsPage({ fundId: this._fundId }));
+        break;
+      case "/dataroom":
       case "/data-room":
-        this._renderPage(new DataRoomPage({ fundId: this._fundId }));
+        this._renderPage(new DataroomPage({ fundId: this._fundId }));
         break;
       case "/cash":
         this._renderPage(new CashManagementPage({ fundId: this._fundId, onNavigate: (p) => this.navigate(p) }));
@@ -154,11 +165,48 @@ export class AppShell {
       case "/compliance":
         this._renderPage(new CompliancePage({ fundId: this._fundId }));
         break;
+      case "/actions":
+        this._renderPage(new ActionsPage({ fundId: this._fundId }));
+        break;
+      case "/ai":
       case "/copilot":
-        this._renderPage(new FundCopilotPage({ fundId: this._fundId }));
+        this._renderPage(new AiPage({ fundId: this._fundId }));
         break;
       case "/reporting":
         this._renderPage(new ReportingPage({ fundId: this._fundId }));
+        break;
+      case "/signatures":
+        this._renderPage(new SignaturesPage({ fundId: this._fundId }));
+        break;
+      case "/assets":
+        this._renderPage(new AssetsPage({ fundId: this._fundId }));
+        break;
+      case "/alerts":
+        this._renderPage(new AlertsPage({ fundId: this._fundId }));
+        break;
+      case "/portfolio-actions":
+        this._renderPage(new PortfolioActionsPage({ fundId: this._fundId }));
+        break;
+      case "/fund-investment":
+        this._renderPage(new FundInvestmentPage({ fundId: this._fundId }));
+        break;
+      case "/asset-obligations":
+        this._renderPage(new AssetObligationsPage({ fundId: this._fundId }));
+        break;
+      case "/evidence":
+        this._renderPage(new EvidencePage({ fundId: this._fundId }));
+        break;
+      case "/auditor-evidence":
+        this._renderPage(new AuditorEvidencePage({ fundId: this._fundId }));
+        break;
+      case "/report-packs":
+        this._renderPage(new ReportPacksLegacyPage({ fundId: this._fundId }));
+        break;
+      case "/investor-portal":
+        this._renderPage(new InvestorPortalPage({ fundId: this._fundId }));
+        break;
+      case "/nav-assets":
+        this._renderPage(new NavAssetsPage({ fundId: this._fundId }));
         break;
       default:
         this.navigate("/dashboard");
