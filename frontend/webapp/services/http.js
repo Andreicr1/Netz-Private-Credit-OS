@@ -1,6 +1,6 @@
 import { getDevActorHeaderValue } from "./env.js";
 
-let cachedPrincipalHeaderPromise = null;
+let cachedPrincipalHeadersPromise = null;
 
 function isStaticWebAppsHost() {
   try {
@@ -19,32 +19,35 @@ function getClientPrincipal(payload) {
   return payload && payload.clientPrincipal ? payload.clientPrincipal : null;
 }
 
-function encodeBase64Utf8(value) {
-  return btoa(unescape(encodeURIComponent(value)));
-}
-
-async function getSwaClientPrincipalHeader() {
+async function getSwaClientPrincipalHeaders() {
   if (!isStaticWebAppsHost()) {
-    return null;
+    return {};
   }
 
-  if (!cachedPrincipalHeaderPromise) {
-    cachedPrincipalHeaderPromise = fetch("/.auth/me", { method: "GET", credentials: "include" })
+  if (!cachedPrincipalHeadersPromise) {
+    cachedPrincipalHeadersPromise = fetch("/.auth/me", { method: "GET", credentials: "include" })
       .then(async (res) => {
         if (!res.ok) {
-          return null;
+          return {};
         }
         const payload = await res.json();
         const principal = getClientPrincipal(payload);
         if (!principal) {
-          return null;
+          return {};
         }
-        return encodeBase64Utf8(JSON.stringify(principal));
+        const headers = {};
+        if (principal.userId) {
+          headers["X-MS-CLIENT-PRINCIPAL-ID"] = String(principal.userId);
+        }
+        if (principal.userDetails) {
+          headers["X-MS-CLIENT-PRINCIPAL-NAME"] = String(principal.userDetails);
+        }
+        return headers;
       })
-      .catch(() => null);
+      .catch(() => ({}));
   }
 
-  return cachedPrincipalHeaderPromise;
+  return cachedPrincipalHeadersPromise;
 }
 
 export function buildHttpError(res, url, detailText) {
@@ -57,13 +60,13 @@ export function buildHttpError(res, url, detailText) {
 
 export async function fetchJson(url, options = {}) {
   const devActor = getDevActorHeaderValue();
-  const principalHeader = await getSwaClientPrincipalHeader();
+  const principalHeaders = await getSwaClientPrincipalHeaders();
   const res = await fetch(url, {
     ...options,
     headers: {
       Accept: "application/json",
       ...(devActor ? { "X-DEV-ACTOR": devActor } : {}),
-      ...(principalHeader ? { "X-MS-CLIENT-PRINCIPAL": principalHeader } : {}),
+      ...(principalHeaders || {}),
       ...(options.headers || {}),
     },
   });
@@ -96,13 +99,13 @@ export function postJson(url, payload) {
 
 export async function postForm(url, formData) {
   const devActor = getDevActorHeaderValue();
-  const principalHeader = await getSwaClientPrincipalHeader();
+  const principalHeaders = await getSwaClientPrincipalHeaders();
   const res = await fetch(url, {
     method: "POST",
     body: formData,
     headers: {
       ...(devActor ? { "X-DEV-ACTOR": devActor } : {}),
-      ...(principalHeader ? { "X-MS-CLIENT-PRINCIPAL": principalHeader } : {}),
+      ...(principalHeaders || {}),
     },
   });
   const text = await res.text();
