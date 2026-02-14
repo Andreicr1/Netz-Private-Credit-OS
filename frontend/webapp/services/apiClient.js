@@ -170,11 +170,24 @@ export async function ensureAuthenticated() {
       return true;
     }
   } catch {
+    // SWA principal not available — fall through
   }
 
-  const currentPath = `${window.location.pathname || "/"}${window.location.search || ""}${window.location.hash || ""}`;
-  window.location.replace(`/.auth/login/aad?post_login_redirect_uri=${encodeURIComponent(currentPath)}`);
-  return false;
+  // If /.auth/login/aad is available, redirect to it.
+  // Otherwise (AAD not registered on SWA yet), allow access — the backend
+  // AUTHZ_BYPASS_ENABLED flag handles authorization in the interim.
+  try {
+    const probe = await fetch("/.auth/login/aad", { method: "HEAD", redirect: "manual" });
+    if (probe.status !== 404) {
+      const currentPath = `${window.location.pathname || "/"}${window.location.search || ""}${window.location.hash || ""}`;
+      window.location.replace(`/.auth/login/aad?post_login_redirect_uri=${encodeURIComponent(currentPath)}`);
+      return false;
+    }
+  } catch {
+    // Network error probing auth endpoint — allow access
+  }
+
+  return true;
 }
 
 const apiClient = {
