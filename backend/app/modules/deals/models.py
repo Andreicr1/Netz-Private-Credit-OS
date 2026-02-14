@@ -12,6 +12,15 @@ from app.core.db.base import AuditMetaMixin, Base, FundScopedMixin, IdMixin
 class Deal(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
     __tablename__ = "pipeline_deals"
 
+    deal_name: Mapped[str | None] = mapped_column(String(300), nullable=True, index=True)
+    sponsor_name: Mapped[str | None] = mapped_column(String(300), nullable=True, index=True)
+    lifecycle_stage: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    first_detected_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    last_updated_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    deal_folder_path: Mapped[str | None] = mapped_column(String(800), nullable=True, index=True)
+    transition_target_container: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    intelligence_history: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
     title: Mapped[str] = mapped_column(String(300), index=True)
     borrower_name: Mapped[str | None] = mapped_column(String(300), nullable=True, index=True)
     requested_amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)

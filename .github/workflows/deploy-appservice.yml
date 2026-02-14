@@ -213,6 +213,18 @@ jobs:
               || true
           done
 
+      # --- Alembic Migration Gate: Staging ---
+      - name: Alembic migration gate (staging)
+        shell: bash
+        env:
+          STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          cd backend
+          export DATABASE_URL="${STAGING_DATABASE_URL}"
+          export PYTHONPATH="${PWD}/../.python_packages/lib/site-packages:${PYTHONPATH:-}"
+          python -m alembic upgrade head 2>&1 | tee ../migration_staging.log
+
       - name: Smoke test staging slot /health
         shell: bash
         run: |
@@ -233,6 +245,18 @@ jobs:
 
           echo "Staging slot health check failed"
           exit 1
+
+      # --- Alembic Migration Gate: Production ---
+      - name: Alembic migration gate (production)
+        shell: bash
+        env:
+          PROD_DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          cd backend
+          export DATABASE_URL="${PROD_DATABASE_URL}"
+          export PYTHONPATH="${PWD}/../.python_packages/lib/site-packages:${PYTHONPATH:-}"
+          python -m alembic upgrade head 2>&1 | tee ../migration_prod.log
 
       - name: Optional authsettingsV2 config (production app)
         shell: bash
@@ -295,3 +319,13 @@ jobs:
             --target-slot production
 
           echo "Rollback swap executed"
+
+      - name: Upload migration logs on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: alembic-migration-logs
+          path: |
+            migration_staging.log
+            migration_prod.log
+          if-no-files-found: ignore

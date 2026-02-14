@@ -206,6 +206,7 @@ def create_app() -> FastAPI:
     app.include_router(reports_router, prefix="/api")
     # NOTE: dataroom_router already uses prefix '/api/dataroom' (avoid '/api/api/...').
     app.include_router(cash_router, prefix="/api")
+    app.include_router(ai_router, prefix="/api")
 
     return app
 

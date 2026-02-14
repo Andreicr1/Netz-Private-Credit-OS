@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import uuid
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, JSON, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db.base import AuditMetaMixin, Base, FundScopedMixin, IdMixin
@@ -70,4 +70,337 @@ class AIAnswerCitation(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
     source_blob: Mapped[str | None] = mapped_column(String(800), nullable=True)
 
     __table_args__ = (Index("ix_ai_answer_citations_fund_answer", "fund_id", "answer_id"),)
+
+
+class DocumentRegistry(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "document_registry"
+
+    document_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), index=True, nullable=True)
+    version_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("document_versions.id", ondelete="CASCADE"), index=True, nullable=True)
+    blob_path: Mapped[str] = mapped_column(String(800), nullable=False)
+    container_name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    domain_tag: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    authority: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    shareability: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    detected_doc_type: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    lifecycle_stage: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    last_ingested_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    checksum: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    etag: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    last_modified_utc: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    root_folder: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)
+    folder_path: Mapped[str | None] = mapped_column(String(800), nullable=True, index=True)
+    title: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
+    institutional_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    source_signals: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    classifier_version: Mapped[str] = mapped_column(String(80), nullable=False, default="wave-ai1-v1")
+    as_of: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    data_latency: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    data_quality: Mapped[str | None] = mapped_column(String(16), nullable=True, default="OK")
+
+    __table_args__ = (
+        Index("ix_document_registry_fund_type", "fund_id", "institutional_type"),
+        Index("ix_document_registry_fund_version", "fund_id", "version_id", unique=True),
+        Index("ix_document_registry_fund_container_blob", "fund_id", "container_name", "blob_path", unique=True),
+    )
+
+
+class ManagerProfile(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "manager_profiles"
+
+    name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    strategy: Mapped[str] = mapped_column(String(200), nullable=False)
+    region: Mapped[str] = mapped_column(String(120), nullable=False)
+    vehicle_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    declared_target_return: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    reporting_cadence: Mapped[str] = mapped_column(String(80), nullable=False)
+    key_risks_declared: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    last_document_update: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    source_documents: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    as_of: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    data_latency: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    data_quality: Mapped[str | None] = mapped_column(String(16), nullable=True, default="OK")
+
+    __table_args__ = (Index("ix_manager_profiles_fund_name", "fund_id", "name", unique=True),)
+
+
+class ObligationRegister(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "obligation_register"
+
+    obligation_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    obligation_text: Mapped[str] = mapped_column(Text, nullable=False)
+    frequency: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    due_rule: Mapped[str] = mapped_column(String(300), nullable=False)
+    responsible_party: Mapped[str] = mapped_column(String(120), nullable=False)
+    evidence_expected: Mapped[str] = mapped_column(String(300), nullable=False)
+    status: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    source_documents: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    as_of: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    data_latency: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    data_quality: Mapped[str | None] = mapped_column(String(16), nullable=True, default="OK")
+
+    __table_args__ = (Index("ix_obligation_register_fund_obligation_id", "fund_id", "obligation_id", unique=True),)
+
+
+class GovernanceAlert(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "governance_alerts"
+
+    alert_id: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    domain: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    entity_ref: Mapped[str] = mapped_column(String(200), nullable=False)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    actionable_next_step: Mapped[str] = mapped_column(Text, nullable=False)
+    as_of: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    data_latency: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    data_quality: Mapped[str | None] = mapped_column(String(16), nullable=True, default="OK")
+
+    __table_args__ = (Index("ix_governance_alerts_fund_alert_id", "fund_id", "alert_id", unique=True),)
+
+
+class DocumentClassification(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "document_classifications"
+
+    doc_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("document_registry.id", ondelete="CASCADE"), nullable=False, index=True)
+    doc_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    confidence_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    classification_basis: Mapped[str] = mapped_column(String(120), nullable=False)
+
+    __table_args__ = (Index("ix_document_classifications_fund_doc", "fund_id", "doc_id", unique=True),)
+
+
+class DocumentGovernanceProfile(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "document_governance_profile"
+
+    doc_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("document_registry.id", ondelete="CASCADE"), nullable=False, index=True)
+    resolved_authority: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    binding_scope: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    shareability_final: Mapped[str] = mapped_column(String(40), nullable=False)
+    jurisdiction: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    __table_args__ = (Index("ix_document_governance_profile_fund_doc", "fund_id", "doc_id", unique=True),)
+
+
+class KnowledgeAnchor(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "knowledge_anchors"
+
+    doc_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("document_registry.id", ondelete="CASCADE"), nullable=False, index=True)
+    anchor_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    anchor_value: Mapped[str] = mapped_column(String(500), nullable=False)
+    source_snippet: Mapped[str | None] = mapped_column(Text, nullable=True)
+    page_reference: Mapped[str | None] = mapped_column(String(80), nullable=True)
+
+    __table_args__ = (Index("ix_knowledge_anchors_fund_doc", "fund_id", "doc_id"),)
+
+
+class KnowledgeEntity(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "knowledge_entities"
+
+    entity_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    canonical_name: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
+
+    __table_args__ = (Index("ix_knowledge_entities_fund_type_name", "fund_id", "entity_type", "canonical_name", unique=True),)
+
+
+class KnowledgeLink(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "knowledge_links"
+
+    source_document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("document_registry.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_entity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("knowledge_entities.id", ondelete="CASCADE"), nullable=False, index=True)
+    link_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    authority_tier: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
+    evidence_snippet: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("ix_knowledge_links_fund_source_target_type", "fund_id", "source_document_id", "target_entity_id", "link_type", unique=True),
+    )
+
+
+class ObligationEvidenceMap(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "obligation_evidence_map"
+
+    obligation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("knowledge_entities.id", ondelete="CASCADE"), nullable=False, index=True)
+    evidence_document_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("document_registry.id", ondelete="SET NULL"), nullable=True, index=True)
+    satisfaction_status: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    last_checked_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+    __table_args__ = (Index("ix_obligation_evidence_map_fund_obligation", "fund_id", "obligation_id", unique=True),)
+
+
+class DealDocumentIntelligence(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "deal_documents"
+
+    deal_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pipeline_deals.id", ondelete="CASCADE"), nullable=False, index=True)
+    doc_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("document_registry.id", ondelete="CASCADE"), nullable=False, index=True)
+    doc_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    confidence_score: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    __table_args__ = (Index("ix_deal_documents_fund_deal_doc", "fund_id", "deal_id", "doc_id", unique=True),)
+
+
+class DealIntelligenceProfile(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "deal_intelligence_profiles"
+
+    deal_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pipeline_deals.id", ondelete="CASCADE"), nullable=False, index=True)
+    strategy_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    geography: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    sector_focus: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    target_return: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    risk_band: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    liquidity_profile: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    capital_structure_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    key_risks: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    differentiators: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    summary_ic_ready: Mapped[str] = mapped_column(Text, nullable=False)
+    last_ai_refresh: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+    __table_args__ = (Index("ix_deal_intelligence_profiles_fund_deal", "fund_id", "deal_id", unique=True),)
+
+
+class DealRiskFlag(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "deal_risk_flags"
+
+    deal_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pipeline_deals.id", ondelete="CASCADE"), nullable=False, index=True)
+    risk_type: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    reasoning: Mapped[str] = mapped_column(Text, nullable=False)
+    source_document: Mapped[str | None] = mapped_column(String(800), nullable=True)
+
+    __table_args__ = (Index("ix_deal_risk_flags_fund_deal", "fund_id", "deal_id"),)
+
+
+class DealICBrief(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "deal_ic_briefs"
+
+    deal_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pipeline_deals.id", ondelete="CASCADE"), nullable=False, index=True)
+    executive_summary: Mapped[str] = mapped_column(Text, nullable=False)
+    opportunity_overview: Mapped[str] = mapped_column(Text, nullable=False)
+    return_profile: Mapped[str] = mapped_column(Text, nullable=False)
+    downside_case: Mapped[str] = mapped_column(Text, nullable=False)
+    risk_summary: Mapped[str] = mapped_column(Text, nullable=False)
+    comparison_peer_funds: Mapped[str] = mapped_column(Text, nullable=False)
+    recommendation_signal: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+
+    __table_args__ = (Index("ix_deal_ic_briefs_fund_deal", "fund_id", "deal_id", unique=True),)
+
+
+class PipelineAlert(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "pipeline_alerts"
+
+    deal_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("pipeline_deals.id", ondelete="CASCADE"), nullable=False, index=True)
+    alert_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    resolved_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    __table_args__ = (Index("ix_pipeline_alerts_fund_deal", "fund_id", "deal_id"),)
+
+
+class ActiveInvestment(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "active_investments"
+
+    deal_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("pipeline_deals.id", ondelete="SET NULL"), nullable=True, index=True)
+    primary_document_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("document_registry.id", ondelete="SET NULL"), nullable=True, index=True)
+    investment_name: Mapped[str] = mapped_column(String(300), nullable=False, index=True)
+    manager_name: Mapped[str | None] = mapped_column(String(300), nullable=True, index=True)
+    lifecycle_status: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    source_container: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    source_folder: Mapped[str] = mapped_column(String(400), nullable=False, index=True)
+    strategy_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    target_return: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    committed_capital_usd: Mapped[float | None] = mapped_column(nullable=True)
+    deployed_capital_usd: Mapped[float | None] = mapped_column(nullable=True)
+    current_nav_usd: Mapped[float | None] = mapped_column(nullable=True)
+    last_monitoring_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    transition_log: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    as_of: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    data_latency: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    data_quality: Mapped[str | None] = mapped_column(String(16), nullable=True, default="OK")
+
+    __table_args__ = (
+        Index("ix_active_investments_fund_name", "fund_id", "investment_name"),
+        Index("ix_active_investments_fund_source_folder", "fund_id", "source_folder", unique=True),
+    )
+
+
+class PerformanceDriftFlag(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "performance_drift_flags"
+
+    investment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("active_investments.id", ondelete="CASCADE"), nullable=False, index=True)
+    metric_name: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
+    baseline_value: Mapped[float | None] = mapped_column(nullable=True)
+    current_value: Mapped[float | None] = mapped_column(nullable=True)
+    drift_pct: Mapped[float | None] = mapped_column(nullable=True)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    reasoning: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="OPEN", index=True)
+    as_of: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+    __table_args__ = (Index("ix_performance_drift_flags_fund_investment", "fund_id", "investment_id"),)
+
+
+class CovenantStatusRegister(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "covenant_status_register"
+
+    investment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("active_investments.id", ondelete="CASCADE"), nullable=False, index=True)
+    covenant_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("covenants.id", ondelete="SET NULL"), nullable=True, index=True)
+    covenant_test_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("covenant_tests.id", ondelete="SET NULL"), nullable=True, index=True)
+    breach_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("covenant_breaches.id", ondelete="SET NULL"), nullable=True, index=True)
+    covenant_name: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_tested_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_test_due_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    as_of: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+    __table_args__ = (Index("ix_covenant_status_register_fund_investment", "fund_id", "investment_id"),)
+
+
+class CashImpactFlag(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "cash_impact_flags"
+
+    investment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("active_investments.id", ondelete="CASCADE"), nullable=False, index=True)
+    transaction_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("cash_transactions.id", ondelete="SET NULL"), nullable=True, index=True)
+    impact_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    estimated_impact_usd: Mapped[float | None] = mapped_column(nullable=True)
+    liquidity_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    resolved_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    as_of: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+    __table_args__ = (Index("ix_cash_impact_flags_fund_investment", "fund_id", "investment_id"),)
+
+
+class InvestmentRiskRegistry(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "investment_risk_registry"
+
+    investment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("active_investments.id", ondelete="CASCADE"), nullable=False, index=True)
+    risk_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    risk_level: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    trend: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    source_evidence: Mapped[list[dict] | None] = mapped_column(JSON, nullable=True)
+    as_of: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+    __table_args__ = (Index("ix_investment_risk_registry_fund_investment", "fund_id", "investment_id"),)
+
+
+class BoardMonitoringBrief(Base, IdMixin, FundScopedMixin, AuditMetaMixin):
+    __tablename__ = "board_monitoring_briefs"
+
+    investment_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("active_investments.id", ondelete="CASCADE"), nullable=False, index=True)
+    executive_summary: Mapped[str] = mapped_column(Text, nullable=False)
+    performance_view: Mapped[str] = mapped_column(Text, nullable=False)
+    covenant_view: Mapped[str] = mapped_column(Text, nullable=False)
+    liquidity_view: Mapped[str] = mapped_column(Text, nullable=False)
+    risk_reclassification_view: Mapped[str] = mapped_column(Text, nullable=False)
+    recommended_actions: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    last_generated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    as_of: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+    __table_args__ = (Index("ix_board_monitoring_briefs_fund_investment", "fund_id", "investment_id", unique=True),)
 

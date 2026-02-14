@@ -243,6 +243,7 @@ class BlobEntry:
     size_bytes: int | None = None
     content_type: str | None = None
     last_modified: str | None = None
+    etag: str | None = None
 
 
 def list_blobs(
@@ -272,6 +273,7 @@ def list_blobs(
                         size_bytes=child.stat().st_size,
                         content_type=None,
                         last_modified=None,
+                        etag=None,
                     ))
         return entries
 
@@ -294,6 +296,7 @@ def list_blobs(
                 size_bytes=item.size,
                 content_type=getattr(item.content_settings, "content_type", None) if item.content_settings else None,
                 last_modified=lm,
+                etag=getattr(item, "etag", None),
             ))
 
     return entries
