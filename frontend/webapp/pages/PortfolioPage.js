@@ -96,33 +96,40 @@ function makeStatusBadge(text) {
 }
 
 function buildItemList(rows, onSelect) {
-  const list = document.createElement("ui5-list");
+  const list = document.createElement("div");
   if (!rows.length) {
-    const empty = document.createElement("ui5-li");
+    const empty = document.createElement("div");
+    empty.className = "netz-meta-text";
     empty.textContent = "No records available.";
     list.appendChild(empty);
     return list;
   }
 
   rows.forEach((row) => {
-    const item = document.createElement("ui5-li-custom");
-    const wrap = document.createElement("div");
-    wrap.className = "netz-fcl-list-item";
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "netz-entity-row";
+    item.style.width = "100%";
+    item.style.textAlign = "left";
+    item.style.background = "transparent";
+    item.style.border = "none";
+    item.style.cursor = "pointer";
+    item.style.fontFamily = "inherit";
 
     const title = document.createElement("div");
-    title.className = "netz-fcl-list-title";
+    title.className = "netz-entity-title";
     title.textContent = safe(row.borrowerName);
 
     const meta = document.createElement("div");
-    meta.className = "netz-fcl-list-meta";
-    meta.textContent = `${safe(row.exposure)} • Risk ${safe(row.riskBand)}`;
+    meta.className = "netz-entity-meta";
+    meta.textContent = `${safe(row.exposure)} • ${safe(row.riskBand)}`;
 
     const badgeWrap = document.createElement("div");
-    badgeWrap.className = "netz-fcl-list-badge";
+    badgeWrap.className = "netz-entity-badge";
     badgeWrap.appendChild(makeStatusBadge(row.covenantStatus));
+    meta.appendChild(badgeWrap);
 
-    wrap.append(title, meta, badgeWrap);
-    item.appendChild(wrap);
+    item.append(title, meta);
     item.addEventListener("click", () => onSelect(row));
     list.appendChild(item);
   });
@@ -148,6 +155,47 @@ function buildOverviewList(items) {
   return list;
 }
 
+function buildSelectableList(items, onSelect) {
+  const list = document.createElement("div");
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "netz-meta-text";
+    empty.textContent = "No records available.";
+    list.appendChild(empty);
+    return list;
+  }
+
+  items.forEach((item) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "netz-entity-row";
+    row.style.width = "100%";
+    row.style.textAlign = "left";
+    row.style.background = "transparent";
+    row.style.border = "none";
+    row.style.cursor = "pointer";
+    row.style.fontFamily = "inherit";
+
+    const title = document.createElement("div");
+    title.className = "netz-entity-title";
+    title.textContent = safe(item.text);
+
+    const meta = document.createElement("div");
+    meta.className = "netz-entity-meta";
+    meta.textContent = safe(item.description);
+
+    row.append(title, meta);
+    row.addEventListener("click", () => onSelect(item));
+    list.appendChild(row);
+  });
+
+  return list;
+}
+
+async function listFacilities(fundId, params) {
+  return portfolioApi.listLoans(fundId, params);
+}
+
 export class PortfolioPage {
   constructor({ fundId }) {
     this.fundId = fundId;
@@ -167,6 +215,7 @@ export class PortfolioPage {
       alerts: [],
     };
     this.selectedItem = null;
+    this.selectedSubDetail = null;
 
     this.el = document.createElement("ui5-dynamic-page");
 
@@ -190,32 +239,39 @@ export class PortfolioPage {
     content.appendChild(this.errorStrip);
 
     const layout = document.createElement("div");
-    layout.className = "netz-fcl-layout";
+    layout.className = "netz-fcl";
 
-    this.leftColumn = this._buildLeftColumn();
-    this.rightColumn = this._buildRightColumn();
-    layout.append(this.leftColumn, this.rightColumn);
+    this.beginColumn = this._buildBeginColumn();
+    this.midColumn = this._buildMidColumn();
+    this.endColumn = this._buildEndColumn();
+    layout.append(this.beginColumn, this.midColumn, this.endColumn);
 
     content.appendChild(layout);
     this.busy.appendChild(content);
     this.el.appendChild(this.busy);
   }
 
-  _buildLeftColumn() {
-    const column = document.createElement("ui5-card");
-    column.className = "netz-fcl-column";
+  _buildBeginColumn() {
+    const column = document.createElement("div");
+    column.className = "netz-fcl-col netz-fcl-col--begin";
 
-    const header = document.createElement("ui5-card-header");
-    header.titleText = "Portfolio Navigation";
-    header.subtitleText = "Borrowers and Facilities";
-    header.setAttribute("slot", "header");
+    const header = document.createElement("div");
+    header.className = "netz-fcl-header";
+    const title = document.createElement("div");
+    title.className = "netz-title-strong";
+    title.textContent = "Borrowers";
+    const subtitle = document.createElement("div");
+    subtitle.className = "netz-meta-text";
+    subtitle.textContent = "Entity Navigation";
+    header.append(title, subtitle);
     column.appendChild(header);
 
     const body = document.createElement("div");
-    body.className = "netz-fcl-column-body";
+    body.className = "netz-fcl-body";
 
     const controls = document.createElement("div");
-    controls.className = "netz-fcl-controls";
+    controls.className = "netz-multi";
+    controls.style.padding = "0 0 0.75rem 0";
 
     this.listViewSelect = document.createElement("ui5-select");
     this.listViewSelect.accessibleName = "Navigation";
@@ -252,7 +308,7 @@ export class PortfolioPage {
     applyBtn.addEventListener("click", () => this._applyFilters());
 
     const resetBtn = document.createElement("ui5-button");
-    resetBtn.design = "Default";
+    resetBtn.design = "Transparent";
     resetBtn.textContent = "Reset";
     resetBtn.addEventListener("click", () => this._resetFilters());
 
@@ -268,7 +324,7 @@ export class PortfolioPage {
     );
 
     this.leftMeta = document.createElement("div");
-    this.leftMeta.className = "netz-fcl-meta";
+    this.leftMeta.className = "netz-meta-text";
 
     this.listHost = document.createElement("div");
 
@@ -277,24 +333,27 @@ export class PortfolioPage {
     return column;
   }
 
-  _buildRightColumn() {
-    const column = document.createElement("ui5-card");
-    column.className = "netz-fcl-column";
-
-    const header = document.createElement("ui5-card-header");
-    header.titleText = "Borrower Detail";
-    header.setAttribute("slot", "header");
-    this.detailHeader = header;
-    column.appendChild(header);
+  _buildMidColumn() {
+    const column = document.createElement("div");
+    column.className = "netz-fcl-col netz-fcl-col--mid";
 
     const body = document.createElement("div");
-    body.className = "netz-fcl-column-body";
+    body.className = "netz-fcl-body";
 
-    this.detailMeta = document.createElement("div");
-    this.detailMeta.className = "netz-fcl-detail-meta";
+    this.objectHeader = document.createElement("div");
+    this.objectHeader.className = "netz-object-header";
+
+    this.objectTitle = document.createElement("ui5-title");
+    this.objectTitle.level = "H3";
+    this.objectTitle.textContent = "Borrower";
+
+    this.objectKpis = document.createElement("div");
+    this.objectKpis.className = "netz-object-kpis";
+
+    this.objectHeader.append(this.objectTitle, this.objectKpis);
 
     this.tabs = document.createElement("ui5-tabcontainer");
-    this.tabs.className = "netz-fcl-tabs";
+    this.tabs.className = "netz-object-tabs";
 
     this.tabOverview = this._createTab("overview", "Overview");
     this.tabFacilities = this._createTab("facilities", "Facilities");
@@ -302,8 +361,27 @@ export class PortfolioPage {
     this.tabDocuments = this._createTab("documents", "Documents");
 
     this.tabs.append(this.tabOverview, this.tabFacilities, this.tabCovenants, this.tabDocuments);
-    body.append(this.detailMeta, this.tabs);
+    body.append(this.objectHeader, this.tabs);
     column.appendChild(body);
+    return column;
+  }
+
+  _buildEndColumn() {
+    const column = document.createElement("div");
+    column.className = "netz-fcl-col netz-fcl-col--end";
+
+    const header = document.createElement("div");
+    header.className = "netz-fcl-header";
+    const title = document.createElement("div");
+    title.className = "netz-title-strong";
+    title.textContent = "Contextual Sub-Detail";
+    header.appendChild(title);
+
+    this.subDetailBody = document.createElement("div");
+    this.subDetailBody.className = "netz-fcl-body";
+
+    column.append(header, this.subDetailBody);
+    this._renderSubDetailPlaceholder();
     return column;
   }
 
@@ -329,6 +407,33 @@ export class PortfolioPage {
 
   _refreshMeta() {
     this.leftMeta.textContent = `As of: ${safe(this.state.asOf)} • Fund: ${safe(this.fundId)}`;
+  }
+
+  _renderSubDetailPlaceholder() {
+    this.subDetailBody.replaceChildren();
+    const msg = document.createElement("div");
+    msg.className = "netz-meta-text";
+    msg.textContent = "Select a facility or covenant to inspect sub-detail.";
+    this.subDetailBody.appendChild(msg);
+  }
+
+  _renderSubDetail(item, type) {
+    this.selectedSubDetail = { item, type };
+    this.subDetailBody.replaceChildren();
+
+    const wrap = document.createElement("div");
+    wrap.className = "netz-object-header";
+
+    const title = document.createElement("ui5-title");
+    title.level = "H4";
+    title.textContent = safe(item.text);
+
+    const meta = document.createElement("div");
+    meta.className = "netz-object-kpis";
+    meta.textContent = `Type: ${type} • ${safe(item.description)}`;
+
+    wrap.append(title, meta);
+    this.subDetailBody.appendChild(wrap);
   }
 
   _applyFilters() {
@@ -372,8 +477,8 @@ export class PortfolioPage {
 
   _toFacilityRows(payload) {
     return toItems(payload).map((row) => ({
-      id: firstDefined(row.id, row.loan_id, row.external_reference, row.facility_name, row.loan_name),
-      facilityName: firstDefined(row.facility_name, row.facility, row.loan_name),
+      id: firstDefined(row.id, row.facility_id, row.external_reference, row.facility_name, row.facility, row.name),
+      facilityName: firstDefined(row.facility_name, row.facility, row.name),
       borrower: firstDefined(row.borrower_name, row.borrower, row.counterparty),
       exposure: formatCurrency(firstDefined(row.principal_outstanding, row.principal, row.principal_amount, row.notional)),
       riskBand: firstDefined(row.risk_band, row.risk_rating, row.internal_rating),
@@ -406,32 +511,36 @@ export class PortfolioPage {
   _selectItem(row) {
     this.selectedItem = row;
 
-    this.detailHeader.titleText = safe(row.borrowerName || row.borrower, "Borrower Detail");
+    this.objectTitle.textContent = safe(row.borrowerName || row.borrower, "Borrower");
 
-    this.detailMeta.replaceChildren();
+    this.objectKpis.replaceChildren();
     const fragments = [
       `Internal Rating: ${safe(row.internalRating)}`,
       `Exposure: ${safe(row.exposure)}`,
-      `Risk Status: ${safe(row.riskBand)}`,
+      "Risk Status:",
       `Last Review Date: ${safe(row.lastReviewDate || row.maturityDate)}`,
     ];
-    const badge = makeStatusBadge(row.covenantStatus);
-    const text = document.createElement("span");
-    text.textContent = fragments.join(" • ");
-    this.detailMeta.append(text, badge);
+    fragments.forEach((fragment) => {
+      const span = document.createElement("span");
+      span.textContent = fragment;
+      this.objectKpis.appendChild(span);
+    });
+    this.objectKpis.appendChild(makeStatusBadge(row.covenantStatus));
 
     const facilitiesItems = this.data.facilities
       .filter((facility) => String(facility.borrower || "") === String(row.borrowerName || row.borrower || ""))
       .map((facility) => ({
         text: safe(facility.facilityName),
         description: `${safe(facility.exposure)} • Maturity ${safe(facility.maturityDate)}`,
+        source: facility,
       }));
 
     const covenantItems = this.data.alerts
       .filter((alert) => String(firstDefined(alert.entity_type, "")).toLowerCase().includes("covenant") || String(firstDefined(alert.alert_type, "")).toLowerCase().includes("covenant"))
       .map((alert) => ({
-        text: firstDefined(alert.alert_type, "Covenant Monitoring"),
+        text: firstDefined(alert.alert_type, "Covenant"),
         description: firstDefined(alert.message, alert.status, alert.severity, "—"),
+        source: alert,
       }));
 
     const documentItems = [
@@ -446,9 +555,15 @@ export class PortfolioPage {
         { text: "Covenant Monitoring", description: safe(row.covenantStatus) },
       ]),
     );
-    this.tabFacilities.firstElementChild.replaceChildren(buildOverviewList(facilitiesItems));
-    this.tabCovenants.firstElementChild.replaceChildren(buildOverviewList(covenantItems));
+    this.tabFacilities.firstElementChild.replaceChildren(
+      buildSelectableList(facilitiesItems, (item) => this._renderSubDetail(item, "Facility")),
+    );
+    this.tabCovenants.firstElementChild.replaceChildren(
+      buildSelectableList(covenantItems, (item) => this._renderSubDetail(item, "Covenant")),
+    );
     this.tabDocuments.firstElementChild.replaceChildren(buildOverviewList(documentItems));
+
+    this._renderSubDetailPlaceholder();
   }
 
   async onShow() {
@@ -468,23 +583,23 @@ export class PortfolioPage {
         investment_type: this.state.filters.investmentType,
       };
 
-      const loanParams = {
+      const facilityParams = {
         limit: 100,
         offset: 0,
         investment_type: this.state.filters.investmentType,
       };
 
-      const [borrowers, loans, alerts] = await Promise.all([
+      const [borrowers, facilitiesPayload, alerts] = await Promise.all([
         portfolioApi.listBorrowers(this.fundId, borrowerParams),
-        portfolioApi.listLoans(this.fundId, loanParams),
+        listFacilities(this.fundId, facilityParams),
         portfolioApi.listAlerts(this.fundId, { limit: 50, offset: 0 }),
       ]);
 
-      this.state.asOf = getAsOf(borrowers, loans, alerts);
+      this.state.asOf = getAsOf(borrowers, facilitiesPayload, alerts);
       this._refreshMeta();
 
       const borrowerRows = this._toBorrowerRows(borrowers);
-      const facilityRows = this._toFacilityRows(loans).map((row) => ({
+      const facilityRows = this._toFacilityRows(facilitiesPayload).map((row) => ({
         borrowerName: row.borrower,
         exposure: row.exposure,
         riskBand: row.riskBand,
@@ -497,8 +612,9 @@ export class PortfolioPage {
       this.data.alerts = toItems(alerts);
 
       const typeSet = new Set(this.state.investmentTypes);
+      // TODO: Investment categories must be DB-driven (multi-asset)
       [
-        "Direct Loans",
+        "Facilities",
         "Equity Participations",
         "Investment Funds",
       ].forEach((value) => typeSet.add(value));
