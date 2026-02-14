@@ -1,163 +1,178 @@
-## Netz Private Credit OS — Backend (MVP scaffold)
+# Netz Private Credit OS
 
-Backend institucional e audit-ready para o **Netz Private Credit Fund**, com **FastAPI + SQLAlchemy 2.0 + Alembic** e **multi-tenant por fund** (fund scoping obrigatório em todas as rotas de domínio).
+Institutional-grade operating system for private credit governance.
 
-### Stack
-- **Python**: 3.11+
-- **API**: FastAPI
-- **ORM**: SQLAlchemy 2.0 (typed)
-- **Migrations**: Alembic
-- **DB (dev)**: Postgres via Docker Compose
-- **Auth**: Abstração com `X-DEV-ACTOR` em dev e skeleton JWKS/OIDC para Entra em prod
-- **Auditoria**: `audit_events` + `request_id` middleware + before/after snapshots
-### Rodar local (Docker)
+---
 
-Subir Postgres + API:
+## Overview
 
-```bash
-docker-compose up --build
-```
+Netz Private Credit OS is the internal Control Plane of the group’s credit operations.
 
-Endpoints principais:
-- `GET /health`
-- `GET /docs`
-### Autenticação em DEV (`X-DEV-ACTOR`)
+It provides an institutional operating layer for:
 
-Todas as rotas de domínio ficam sob:
-- `/funds/{fund_id}/...`
+- Portfolio governance
+- Deal lifecycle management
+- Cash workflows
+- Compliance monitoring
+- Institutional reporting
+- AI-assisted intelligence cycles
 
-Em `ENV=dev`, envie o header **`X-DEV-ACTOR`** com JSON:
+The platform is deployed on Microsoft Azure and engineered under strict governance, audit, and operational discipline.
 
-```json
-{"actor_id":"dev-user","roles":["GP"],"fund_ids":["<fund_uuid>"]}
-```
+This repository represents the authoritative system of record for the internal Control Plane.
 
-### Seed em DEV
+---
 
-Somente em `ENV=dev` existe um endpoint de conveniência para bootstrap:
-- `POST /admin/dev/seed`
+## Architecture
 
-Ele cria `fund` + `user` + `user_fund_roles` e retorna um payload pronto para `X-DEV-ACTOR`.
+### Core Stack
 
-### Dataroom Ingest (upload → ingest → search)
+- **Frontend**: Azure Static Web App  
+  - UI5 Web Components  
+  - ES Modules  
+  - Institutional Layout System (FCL + Multi-Instance)
 
-Rotas:
-- `POST /api/dataroom/documents` (upload + registro)
-- `POST /api/dataroom/documents/{document_id}/ingest?fund_id=...` (extrai texto, chunking, embeddings (se configurado), indexa no Azure AI Search)
-- `GET /api/dataroom/search?fund_id=...&q=...` (consulta no `fund-documents-index`)
+- **Backend**: FastAPI (Python 3.11)
 
-Exemplo (DEV):
+- **Database**: Azure PostgreSQL Flexible Server  
+  - Alembic-managed schema  
+  - No auto-DDL
 
-```bash
-# 1) Upload
-curl -sS -X POST "http://localhost:8000/api/dataroom/documents" \
-  -H "Content-Type: multipart/form-data" \
-  -H "X-DEV-ACTOR: {\"actor_id\":\"dev-user\",\"roles\":[\"GP\"],\"fund_ids\":[\"<fund_uuid>\"]}" \
-  -F "fund_id=<fund_uuid>" \
-  -F "title=COM FINAL - Netz Private Credit (Offering Memorandum)" \
-  -F "file=@./docs/COM_FINAL.pdf"
-```
+- **Storage**: Azure Blob Storage (Managed Identity)
 
-```bash
-# 2) Ingest (idempotente: reingest não duplica; upsert no Search por chave determinística)
-curl -sS -X POST "http://localhost:8000/api/dataroom/documents/<document_uuid>/ingest?fund_id=<fund_uuid>&store_artifacts_in_evidence=true" \
-  -H "X-DEV-ACTOR: {\"actor_id\":\"dev-user\",\"roles\":[\"GP\"],\"fund_ids\":[\"<fund_uuid>\"]}"
-```
+- **Search**: Azure Cognitive Search
 
-```bash
-# 3) Search (retorna chunks indexados)
-curl -sS "http://localhost:8000/api/dataroom/search?fund_id=<fund_uuid>&q=bank%20service%20fees&top=5" \
-  -H "X-DEV-ACTOR: {\"actor_id\":\"dev-user\",\"roles\":[\"GP\"],\"fund_ids\":[\"<fund_uuid>\"]}"
-```
+- **AI**: Azure OpenAI (Foundry Responses API)
 
-Observações:
-- O upload armazena o arquivo no container `dataroom`.
-- Artefatos (texto extraído, manifest, embeddings quando aplicável) vão para o container `evidence`.
-- Para embeddings, configure `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_EMBEDDINGS_DEPLOYMENT`.
+- **Observability**: Azure Application Insights  
+  - OpenTelemetry instrumentation  
+  - Dependency tracking  
+  - Exception monitoring  
 
-### Cash Management (USD-only) com governança auditável
+---
 
-Workflow mínimo:
-- `DRAFT → PENDING_APPROVAL → APPROVED → SENT_TO_ADMIN → EXECUTED`
-- (ou `REJECTED / CANCELLED`)
+## Frontend Layout System
 
-Regras duras:
-- **currency != USD** é bloqueado.
-- **APPROVED só ocorre com 2 sign-offs de DIRECTOR** (registrados via endpoint).
-- **INVESTMENT** exige `investment_memo_document_id` + **IC approvals >= 2** (regra interna 2/3).
-- Campos críticos não têm endpoint de edição após `APPROVED` (somente transições).
-- Ao aprovar, o sistema grava um **evidence bundle JSON** no container `evidence` + hash + audit events.
+The UI follows a formal institutional layout constitution.
 
-Rotas:
-- `POST /api/cash/transactions` (cria DRAFT)
-- `POST /api/cash/transactions/{id}/submit?fund_id=...` (DRAFT → PENDING_APPROVAL)
-- `POST /api/cash/transactions/{id}/approve/director` (registra sign-off de diretor)
-- `POST /api/cash/transactions/{id}/approve/ic` (somente INVESTMENT; registra IC approvals)
-- `POST /api/cash/transactions/{id}/generate-instructions?fund_id=...` (gera HTML e salva em evidence)
-- `POST /api/cash/transactions/{id}/mark-sent` (SENT_TO_ADMIN)
-- `POST /api/cash/transactions/{id}/mark-executed` (EXECUTED)
+### Entity Modules (FCL — 3 Column Standard)
 
-Exemplo (EXPENSE):
+Used for:
 
-```bash
-# 1) Criar (DRAFT)
-curl -sS -X POST "http://localhost:8000/api/cash/transactions" \
-  -H "Content-Type: application/json" \
-  -H "X-DEV-ACTOR: {\"actor_id\":\"dev-user\",\"roles\":[\"GP\"],\"fund_ids\":[\"<fund_uuid>\"]}" \
-  -d '{
-    "fund_id": "<fund_uuid>",
-    "type": "EXPENSE",
-    "amount": 1250.00,
-    "currency": "USD",
-    "justification_text": "Bank service fees conforme OM.",
-    "policy_basis": [
-      {"document_id":"<om_doc_uuid>","section":"Expenses","excerpt":"... bank service fees ..."}
-    ],
-    "payment_reference": "Netz Private Credit Fund"
-  }'
-```
+- Portfolio
+- Deals
+- Signatures
 
-```bash
-# 2) Submit
-curl -sS -X POST "http://localhost:8000/api/cash/transactions/<tx_uuid>/submit?fund_id=<fund_uuid>" \
-  -H "X-DEV-ACTOR: {\"actor_id\":\"dev-user\",\"roles\":[\"GP\"],\"fund_ids\":[\"<fund_uuid>\"]}"
-```
+Structure:
 
-```bash
-# 3) Aprovar (2 diretores)
-curl -sS -X POST "http://localhost:8000/api/cash/transactions/<tx_uuid>/approve/director" \
-  -H "Content-Type: application/json" \
-  -H "X-DEV-ACTOR: {\"actor_id\":\"director-1\",\"roles\":[\"GP\"],\"fund_ids\":[\"<fund_uuid>\"]}" \
-  -d '{"fund_id":"<fund_uuid>","approver_name":"Director 1","comment":"OK"}'
+- **Begin Column** → Entity List  
+- **Mid Column** → Object Page  
+- **End Column** → Contextual Sub-detail  
 
-curl -sS -X POST "http://localhost:8000/api/cash/transactions/<tx_uuid>/approve/director" \
-  -H "Content-Type: application/json" \
-  -H "X-DEV-ACTOR: {\"actor_id\":\"director-2\",\"roles\":[\"GP\"],\"fund_ids\":[\"<fund_uuid>\"]}" \
-  -d '{"fund_id":"<fund_uuid>","approver_name":"Director 2","comment":"OK"}'
-```
+No dashboard or board semantics allowed.
 
-```bash
-# 4) Gerar pacote de instrução (HTML)
-curl -sS -X POST "http://localhost:8000/api/cash/transactions/<tx_uuid>/generate-instructions?fund_id=<fund_uuid>" \
-  -H "X-DEV-ACTOR: {\"actor_id\":\"dev-user\",\"roles\":[\"GP\"],\"fund_ids\":[\"<fund_uuid>\"]}"
-```
+### Multi-Instance Modules (4-Layer Standard)
 
-Exemplo (INVESTMENT): antes do 2º diretor, registre IC approvals (>=2):
+Used for:
 
-```bash
-curl -sS -X POST "http://localhost:8000/api/cash/transactions/<tx_uuid>/approve/ic" \
-  -H "Content-Type: application/json" \
-  -H "X-DEV-ACTOR: {\"actor_id\":\"ic-1\",\"roles\":[\"INVESTMENT_TEAM\"],\"fund_ids\":[\"<fund_uuid>\"]}" \
-  -d '{"fund_id":"<fund_uuid>","approver_name":"IC Member 1","comment":"Approve"}'
-```
+- Cash
+- Compliance
+- Reporting
 
-### Testes
+Structure:
 
-Os testes usam SQLite em memória (sem Docker) e validam:
-- `/health`
-- fund scoping (403 ao tentar acessar outra fund)
-```bash
-cd backend
-pytest -q
-```
+1. Command  
+2. Analytical  
+3. Operational  
+4. Monitoring  
 
+Layer mixing is prohibited.
+
+See:
+
+- `docs/architecture/frontend-layout-constitution.md`
+
+---
+
+## Governance Model
+
+The system enforces strict institutional governance:
+
+- All schema changes via **Alembic migrations**
+- No `create_all()` or auto-DDL in production
+- Full **audit trail** for governance actions
+- RBAC-enforced fund boundaries
+- Telemetry-first deployment discipline
+- No global prompt governance outside the repository
+
+Authoritative governance documents:
+
+- `docs/architecture/NETZ-OS-Technical-Constitution-v1.md`
+- `docs/architecture/frontend-layout-constitution.md`
+- `docs/development/agent-guidelines.md`
+
+---
+
+## Observability
+
+The backend is instrumented using Azure Monitor OpenTelemetry.
+
+Production requirements:
+
+- Application Insights request tracing
+- Dependency monitoring (Postgres, Search, OpenAI)
+- Exception capture
+- Structured JSON logging
+
+Observability is not optional.
+
+---
+
+## Development Discipline
+
+All development must follow:
+
+- `docs/development/development-playbook.md`
+- `docs/development/agent-guidelines.md`
+
+Rules:
+
+- No business logic in frontend
+- No backend vocabulary exposed in UI
+- No schema mutation outside Alembic
+- No governance artifacts outside version control
+
+---
+
+## Scope
+
+This repository contains:
+
+✔ Internal Control Plane  
+✔ Internal Data Room page (internal consumption only)
+
+This repository does NOT contain:
+
+✖ Distributed Investor Data Room product  
+✖ External investor-facing distribution system  
+
+A separate repository will govern the distributed Data Room product.
+
+---
+
+## Deployment
+
+- Active production deployment on Azure
+- CI/CD via GitHub Actions
+- Staging → production swap model
+- Migration gates enforced
+
+---
+
+## Status
+
+Production — actively maintained.
+
+---
+
+End.
