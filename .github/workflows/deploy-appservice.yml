@@ -23,7 +23,7 @@ env:
   AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME || 'netz-prod-api' }}
   AZURE_WEBAPP_URL: ${{ vars.AZURE_WEBAPP_URL || 'https://netz-prod-api.azurewebsites.net' }}
   DEPLOY_SLOT: staging
-  SWA_CLIENT_ID: ${{ vars.SWA_CLIENT_ID }}
+  SWA_CLIENT_ID: ${{ vars.SWA_CLIENT_ID || secrets.SWA_CLIENT_ID }}
 
 jobs:
   deploy:
