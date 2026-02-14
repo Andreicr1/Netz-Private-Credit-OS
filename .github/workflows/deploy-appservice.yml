@@ -286,18 +286,27 @@ jobs:
           PY
           python -m alembic upgrade head 2>&1 | tee ../migration_prod.log
 
-      - name: Optional authsettingsV2 config (production app)
+      - name: Configure authsettingsV2 (prod + slot)
         shell: bash
         env:
           AZURE_SUBSCRIPTION_ID_EFFECTIVE: ${{ secrets.AZURE_SUBSCRIPTION_ID || secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_2DB64B82AB4142F0BF1A20F53F83988A }}
         run: |
           set -euo pipefail
 
-          if [[ -n "${SWA_CLIENT_ID:-}" ]]; then
-            az rest --method PUT \
-              --url "https://management.azure.com/subscriptions/${AZURE_SUBSCRIPTION_ID_EFFECTIVE}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.Web/sites/${AZURE_WEBAPP_NAME}/config/authsettingsV2?api-version=2023-12-01" \
-              --body "{\"properties\":{\"platform\":{\"enabled\":true,\"runtimeVersion\":\"~1\"},\"globalValidation\":{\"requireAuthentication\":false,\"unauthenticatedClientAction\":\"AllowAnonymous\"},\"identityProviders\":{\"azureStaticWebApps\":{\"enabled\":true,\"registration\":{\"clientId\":\"${SWA_CLIENT_ID}\"}}}}}"
+          if [[ -z "${SWA_CLIENT_ID:-}" ]]; then
+            echo "::error::Missing required variable SWA_CLIENT_ID for App Service authsettingsV2"
+            exit 1
           fi
+
+          AUTH_BODY="{\"properties\":{\"platform\":{\"enabled\":true,\"runtimeVersion\":\"~1\"},\"globalValidation\":{\"requireAuthentication\":false,\"unauthenticatedClientAction\":\"AllowAnonymous\"},\"identityProviders\":{\"azureStaticWebApps\":{\"enabled\":true,\"registration\":{\"clientId\":\"${SWA_CLIENT_ID}\"}}}}}"
+
+          az rest --method PUT \
+            --url "https://management.azure.com/subscriptions/${AZURE_SUBSCRIPTION_ID_EFFECTIVE}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.Web/sites/${AZURE_WEBAPP_NAME}/config/authsettingsV2?api-version=2023-12-01" \
+            --body "${AUTH_BODY}"
+
+          az rest --method PUT \
+            --url "https://management.azure.com/subscriptions/${AZURE_SUBSCRIPTION_ID_EFFECTIVE}/resourceGroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.Web/sites/${AZURE_WEBAPP_NAME}/slots/${DEPLOY_SLOT}/config/authsettingsV2?api-version=2023-12-01" \
+            --body "${AUTH_BODY}"
 
       - name: Swap staging slot to production
         id: slot_swap
