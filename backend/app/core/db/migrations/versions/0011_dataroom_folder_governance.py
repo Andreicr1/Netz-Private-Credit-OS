@@ -7,6 +7,16 @@ down_revision = "0010_dataroom_ingest_cash_management"
 
 def upgrade():
     # --- documents: folder governance + domain enum
+    op.execute(
+        """
+        CREATE TYPE IF NOT EXISTS document_domain_enum AS ENUM (
+            'OFFERING', 'AUDIT', 'BANK', 'KYC', 'MANDATES', 'CORPORATE',
+            'DEALS_MANAGERS', 'MARKETING', 'PROPOSALS', 'ADMIN', 'BOARD',
+            'INVESTMENT_MANAGER', 'FEEDER', 'OTHER'
+        );
+        """
+    )
+
     op.add_column("documents", sa.Column("root_folder", sa.String(length=200), nullable=True))
     op.add_column("documents", sa.Column("folder_path", sa.String(length=800), nullable=True))
     op.add_column("documents", sa.Column("domain", sa.Enum("OFFERING", "AUDIT", "BANK", "KYC", "MANDATES", "CORPORATE", "DEALS_MANAGERS", "MARKETING", "PROPOSALS", "ADMIN", "BOARD", "INVESTMENT_MANAGER", "FEEDER", "OTHER", name="document_domain_enum"), nullable=True))
@@ -66,5 +76,5 @@ def downgrade():
     op.drop_column("documents", "folder_path")
     op.drop_column("documents", "root_folder")
 
-    op.execute("DROP TYPE document_domain_enum")
+    op.execute("DROP TYPE IF EXISTS document_domain_enum")
 
