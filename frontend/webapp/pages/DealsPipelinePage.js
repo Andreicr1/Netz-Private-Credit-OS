@@ -1,16 +1,8 @@
 import * as dealsApi from "../api/deals.js";
 
-const LATENCY_THRESHOLD = 300;
-
 function safe(value, fallback = "—") {
   if (value === null || value === undefined || value === "") return fallback;
   return String(value);
-}
-
-function toItems(payload) {
-  if (Array.isArray(payload?.items)) return payload.items;
-  if (Array.isArray(payload)) return payload;
-  return [];
 }
 
 function firstDefined(...values) {
@@ -20,6 +12,19 @@ function firstDefined(...values) {
   return null;
 }
 
+function toItems(payload) {
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload)) return payload;
+  return [];
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return safe(value);
+  return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
 function formatCurrency(value) {
   if (value === null || value === undefined || value === "") return "—";
   const number = Number(value);
@@ -27,46 +32,16 @@ function formatCurrency(value) {
   return number.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 }
 
-
-function getAsOf(...payloads) {
-  for (const payload of payloads) {
-    const asOf = firstDefined(payload?.asOf, payload?.as_of, payload?.timestamp, payload?.generated_at);
-    if (asOf) {
-      const date = new Date(asOf);
-      if (!Number.isNaN(date.getTime())) {
-        return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-      }
-      return safe(asOf);
-    }
-  }
-  return "—";
-}
-
-function getGovernanceSignal(payload, fallbackThreshold = LATENCY_THRESHOLD) {
-  const latency = Number(firstDefined(payload?.dataLatency, payload?.data_latency, payload?.latency_ms));
-  const threshold = Number(firstDefined(payload?.dataLatencyThreshold, payload?.latency_threshold, fallbackThreshold));
-  const quality = safe(firstDefined(payload?.dataQuality, payload?.data_quality), "OK");
-
-  if ((!Number.isNaN(latency) && !Number.isNaN(threshold) && latency > threshold) || quality !== "OK") {
-    return {
-      latency: Number.isNaN(latency) ? null : latency,
-      threshold: Number.isNaN(threshold) ? fallbackThreshold : threshold,
-      quality,
-    };
-  }
-  return null;
-}
-
-function buildGovernanceStrip(payload) {
-  const signal = getGovernanceSignal(payload);
-  if (!signal) return null;
-
-  const strip = document.createElement("ui5-message-strip");
-  strip.design = "Warning";
-  strip.hideCloseButton = true;
-  const latencyText = signal.latency == null ? "n/a" : `${signal.latency}ms`;
-  strip.textContent = `Data governance warning — latency ${latencyText} (threshold ${signal.threshold}ms), quality ${signal.quality}.`;
-  return strip;
+function makeBadge(text) {
+  const badge = document.createElement("ui5-tag");
+  badge.textContent = safe(text, "—");
+  const normalized = String(text || "").toLowerCase();
+  badge.design = normalized.includes("closed") || normalized.includes("approved")
+    ? "Positive"
+    : normalized.includes("review") || normalized.includes("committee")
+      ? "Critical"
+      : "Information";
+  return badge;
 }
 
 function setOptions(select, options, selected) {
@@ -85,72 +60,47 @@ function setOptions(select, options, selected) {
   });
 }
 
-function buildDenseTable(columns, rows) {
-  const viewportWidth = window.innerWidth || 1440;
-  const visibleColumns = viewportWidth <= 960
-    ? columns.filter((column) => column.priority === "P1")
-    : viewportWidth <= 1280
-      ? columns.filter((column) => column.priority !== "P3")
-      : columns;
-  const hiddenColumns = columns.filter((column) => !visibleColumns.includes(column));
-
-  const table = document.createElement("ui5-table");
-  table.className = "netz-wave-table-dense";
-
-  const headerRow = document.createElement("ui5-table-header-row");
-  headerRow.setAttribute("slot", "headerRow");
-  visibleColumns.forEach((column) => {
-    const headerCell = document.createElement("ui5-table-header-cell");
-    headerCell.textContent = `${column.label} ${column.priority}`;
-    headerRow.appendChild(headerCell);
-  });
-  if (hiddenColumns.length) {
-    const detailsHeader = document.createElement("ui5-table-header-cell");
-    detailsHeader.textContent = "Details P1";
-    headerRow.appendChild(detailsHeader);
+function buildEntityList(rows, onSelect) {
+  const list = document.createElement("ui5-list");
+  if (!rows.length) {
+    const empty = document.createElement("ui5-li");
+    empty.textContent = "No records available.";
+    list.appendChild(empty);
+    return list;
   }
-  table.appendChild(headerRow);
 
   rows.forEach((row) => {
-    const tr = document.createElement("ui5-table-row");
-    visibleColumns.forEach((column) => {
-      const td = document.createElement("ui5-table-cell");
-      td.textContent = safe(row[column.key]);
-      tr.appendChild(td);
-    });
+    const item = document.createElement("ui5-li-custom");
+    const wrap = document.createElement("div");
+    wrap.className = "netz-fcl-list-item";
 
-    if (hiddenColumns.length) {
-      const detailsCell = document.createElement("ui5-table-cell");
-      const button = document.createElement("ui5-button");
-      button.design = "Transparent";
-      button.textContent = "View";
-      const popover = document.createElement("ui5-responsive-popover");
-      popover.headerText = "Collapsed Columns";
-      const list = document.createElement("ui5-list");
-      hiddenColumns.forEach((column) => {
-        const item = document.createElement("ui5-li");
-        item.textContent = column.label;
-        item.description = safe(row[column.key]);
-        list.appendChild(item);
-      });
-      popover.appendChild(list);
-      button.addEventListener("click", () => popover.showAt(button));
-      detailsCell.append(button, popover);
-      tr.appendChild(detailsCell);
-    }
+    const title = document.createElement("div");
+    title.className = "netz-fcl-list-title";
+    title.textContent = safe(row.dealName);
 
-    table.appendChild(tr);
+    const meta = document.createElement("div");
+    meta.className = "netz-fcl-list-meta";
+    meta.textContent = `${safe(row.sponsor)} • ${safe(row.notional)} • IRR ${safe(row.expectedIrr)}`;
+
+    const badgeWrap = document.createElement("div");
+    badgeWrap.className = "netz-fcl-list-badge";
+    badgeWrap.appendChild(makeBadge(row.stage));
+
+    wrap.append(title, meta, badgeWrap);
+    item.appendChild(wrap);
+    item.addEventListener("click", () => onSelect(row));
+    list.appendChild(item);
   });
 
-  return table;
+  return list;
 }
 
-function buildQueueList(items) {
+function buildList(items) {
   const list = document.createElement("ui5-list");
   if (!items.length) {
-    const li = document.createElement("ui5-li");
-    li.textContent = "No pending approvals.";
-    list.appendChild(li);
+    const empty = document.createElement("ui5-li");
+    empty.textContent = "No records available.";
+    list.appendChild(empty);
     return list;
   }
 
@@ -169,21 +119,21 @@ export class DealsPipelinePage {
     this.state = {
       filters: {
         stage: "",
-        desk: "",
-        riskBand: "",
-        dateRange: "",
+        strategy: "",
+        owner: "",
+        status: "",
       },
-      savedView: "DEFAULT",
-      activeFiltersCount: 0,
       asOf: "—",
     };
+    this.deals = [];
+    this.selectedDeal = null;
 
     this.el = document.createElement("ui5-dynamic-page");
 
     const pageTitle = document.createElement("ui5-dynamic-page-title");
     const heading = document.createElement("ui5-title");
     heading.level = "H1";
-    heading.textContent = "Deals Pipeline";
+    heading.textContent = "Deals";
     pageTitle.appendChild(heading);
     this.el.appendChild(pageTitle);
 
@@ -199,163 +149,106 @@ export class DealsPipelinePage {
     this.errorStrip.style.display = "none";
     content.appendChild(this.errorStrip);
 
-    this.commandLayer = this._buildCommandLayer();
-    this.analyticalLayer = this._buildAnalyticalLayer();
-    this.operationalLayer = this._buildOperationalLayer();
-    this.monitoringLayer = this._buildMonitoringLayer();
+    const layout = document.createElement("div");
+    layout.className = "netz-fcl-layout";
 
-    content.append(this.commandLayer, this.analyticalLayer, this.operationalLayer, this.monitoringLayer);
+    this.leftColumn = this._buildLeftColumn();
+    this.rightColumn = this._buildRightColumn();
+    layout.append(this.leftColumn, this.rightColumn);
+
+    content.appendChild(layout);
     this.busy.appendChild(content);
     this.el.appendChild(this.busy);
   }
 
-  _buildCommandLayer() {
-    const card = document.createElement("ui5-card");
-    card.className = "netz-wave-layer-card";
+  _buildLeftColumn() {
+    const column = document.createElement("ui5-card");
+    column.className = "netz-fcl-column";
 
     const header = document.createElement("ui5-card-header");
-    header.titleText = "Layer 1 — Command";
-    header.subtitleText = "FilterBar";
+    header.titleText = "Deal Navigation";
+    header.subtitleText = "Stage, Strategy, Owner, Status";
     header.setAttribute("slot", "header");
-    card.appendChild(header);
+    column.appendChild(header);
 
     const body = document.createElement("div");
-    body.className = "netz-wave-layer-body";
-
-    this.commandGovernanceHost = document.createElement("div");
-    body.appendChild(this.commandGovernanceHost);
-
-    const bar = document.createElement("ui5-bar");
-    bar.className = "netz-wave-command-bar";
-
-    const left = document.createElement("div");
-    left.setAttribute("slot", "startContent");
-    const title = document.createElement("ui5-title");
-    title.level = "H5";
-    title.textContent = "Deals Command FilterBar";
-    left.appendChild(title);
-
-    const right = document.createElement("div");
-    right.className = "netz-wave-command-meta";
-    right.setAttribute("slot", "endContent");
-
-    this.activeFiltersTag = document.createElement("ui5-tag");
-    this.activeFiltersTag.design = "Information";
-    right.appendChild(this.activeFiltersTag);
-
-    this.asOfTag = document.createElement("ui5-tag");
-    this.asOfTag.design = "Neutral";
-    right.appendChild(this.asOfTag);
-
-    bar.append(left, right);
+    body.className = "netz-fcl-column-body";
 
     const controls = document.createElement("div");
-    controls.className = "netz-wave-command-controls";
+    controls.className = "netz-fcl-controls";
 
     this.stageSelect = document.createElement("ui5-select");
     this.stageSelect.accessibleName = "Stage";
 
-    this.deskSelect = document.createElement("ui5-select");
-    this.deskSelect.accessibleName = "Desk";
+    this.strategySelect = document.createElement("ui5-select");
+    this.strategySelect.accessibleName = "Strategy";
 
-    this.riskBandSelect = document.createElement("ui5-select");
-    this.riskBandSelect.accessibleName = "Risk Band";
+    this.ownerSelect = document.createElement("ui5-select");
+    this.ownerSelect.accessibleName = "Owner";
 
-    this.dateRange = document.createElement("ui5-date-range-picker");
-    this.dateRange.accessibleName = "Date Range";
-
-    this.savedViewSelect = document.createElement("ui5-select");
-    this.savedViewSelect.accessibleName = "Saved View";
-    setOptions(this.savedViewSelect, ["DEFAULT", "IC_QUEUE", "ORIGINATION"], this.state.savedView);
+    this.statusSelect = document.createElement("ui5-select");
+    this.statusSelect.accessibleName = "Status";
 
     const applyBtn = document.createElement("ui5-button");
     applyBtn.design = "Emphasized";
     applyBtn.textContent = "Apply";
     applyBtn.addEventListener("click", () => this._applyFilters());
 
-    const clearBtn = document.createElement("ui5-button");
-    clearBtn.design = "Transparent";
-    clearBtn.textContent = "Clear";
-    clearBtn.addEventListener("click", () => this._clearFilters());
+    const resetBtn = document.createElement("ui5-button");
+    resetBtn.design = "Default";
+    resetBtn.textContent = "Reset";
+    resetBtn.addEventListener("click", () => this._resetFilters());
 
-    controls.append(this.stageSelect, this.deskSelect, this.riskBandSelect, this.dateRange, this.savedViewSelect, applyBtn, clearBtn);
-    body.append(bar, controls);
-    card.appendChild(body);
-    return card;
+    controls.append(this.stageSelect, this.strategySelect, this.ownerSelect, this.statusSelect, applyBtn, resetBtn);
+
+    this.leftMeta = document.createElement("div");
+    this.leftMeta.className = "netz-fcl-meta";
+
+    this.listHost = document.createElement("div");
+
+    body.append(controls, this.leftMeta, this.listHost);
+    column.appendChild(body);
+    return column;
   }
 
-  _buildAnalyticalLayer() {
-    const card = document.createElement("ui5-card");
-    card.className = "netz-wave-layer-card";
+  _buildRightColumn() {
+    const column = document.createElement("ui5-card");
+    column.className = "netz-fcl-column";
 
     const header = document.createElement("ui5-card-header");
-    header.titleText = "Layer 2 — Analytical";
-    header.subtitleText = "Pipeline By Stage (dense)";
+    header.titleText = "Deal Detail";
     header.setAttribute("slot", "header");
-    card.appendChild(header);
+    this.detailHeader = header;
+    column.appendChild(header);
 
     const body = document.createElement("div");
-    body.className = "netz-wave-layer-body";
+    body.className = "netz-fcl-column-body";
 
-    this.analyticalGovernanceHost = document.createElement("div");
-    body.appendChild(this.analyticalGovernanceHost);
+    this.detailMeta = document.createElement("div");
+    this.detailMeta.className = "netz-fcl-detail-meta";
 
-    this.pipelineByStageHost = document.createElement("div");
-    this.pipelineByStageHost.className = "netz-wave-table-host";
-    body.appendChild(this.pipelineByStageHost);
+    this.tabs = document.createElement("ui5-tabcontainer");
 
-    card.appendChild(body);
-    return card;
+    this.tabOverview = this._createTab("Overview");
+    this.tabMemo = this._createTab("Investment Memo");
+    this.tabGovernance = this._createTab("Governance Requirements");
+    this.tabDocuments = this._createTab("Documents");
+    this.tabActivity = this._createTab("Activity Log");
+
+    this.tabs.append(this.tabOverview, this.tabMemo, this.tabGovernance, this.tabDocuments, this.tabActivity);
+
+    body.append(this.detailMeta, this.tabs);
+    column.appendChild(body);
+    return column;
   }
 
-  _buildOperationalLayer() {
-    const card = document.createElement("ui5-card");
-    card.className = "netz-wave-layer-card";
-
-    const header = document.createElement("ui5-card-header");
-    header.titleText = "Layer 3 — Operational";
-    header.subtitleText = "Execution Queue (dense)";
-    header.setAttribute("slot", "header");
-    card.appendChild(header);
-
-    const body = document.createElement("div");
-    body.className = "netz-wave-layer-body";
-
-    this.operationalGovernanceHost = document.createElement("div");
-    body.appendChild(this.operationalGovernanceHost);
-
-    this.executionQueueHost = document.createElement("div");
-    this.executionQueueHost.className = "netz-wave-table-host";
-    body.appendChild(this.executionQueueHost);
-
-    card.appendChild(body);
-    return card;
-  }
-
-  _buildMonitoringLayer() {
-    const card = document.createElement("ui5-card");
-    card.className = "netz-wave-layer-card";
-
-    const header = document.createElement("ui5-card-header");
-    header.titleText = "Layer 4 — Monitoring";
-    header.subtitleText = "Pending Approvals (backend-driven only)";
-    header.setAttribute("slot", "header");
-    card.appendChild(header);
-
-    const body = document.createElement("div");
-    body.className = "netz-wave-layer-body";
-
-    this.monitoringGovernanceHost = document.createElement("div");
-    body.appendChild(this.monitoringGovernanceHost);
-
-    const panel = document.createElement("ui5-panel");
-    panel.headerText = "Pending Approvals";
-    this.pendingApprovalsHost = document.createElement("div");
-    panel.appendChild(this.pendingApprovalsHost);
-
-    body.appendChild(panel);
-    card.appendChild(body);
-    return card;
+  _createTab(text) {
+    const tab = document.createElement("ui5-tab");
+    tab.text = text;
+    const host = document.createElement("div");
+    host.className = "netz-fcl-tab-content";
+    tab.appendChild(host);
+    return tab;
   }
 
   _setError(message) {
@@ -368,115 +261,95 @@ export class DealsPipelinePage {
     this.errorStrip.style.display = "none";
   }
 
-  _refreshCommandMeta() {
-    this.state.activeFiltersCount = [
-      this.state.filters.stage,
-      this.state.filters.desk,
-      this.state.filters.riskBand,
-      this.state.filters.dateRange,
-    ].filter(Boolean).length;
-
-    this.activeFiltersTag.textContent = `activeFiltersCount ${this.state.activeFiltersCount}`;
-    this.asOfTag.textContent = `asOf ${this.state.asOf}`;
-  }
-
   _applyFilters() {
-    this.state.savedView = String(this.savedViewSelect.selectedOption?.value || "DEFAULT");
     this.state.filters = {
       stage: this.stageSelect.selectedOption?.value || "",
-      desk: this.deskSelect.selectedOption?.value || "",
-      riskBand: this.riskBandSelect.selectedOption?.value || "",
-      dateRange: this.dateRange.value || "",
+      strategy: this.strategySelect.selectedOption?.value || "",
+      owner: this.ownerSelect.selectedOption?.value || "",
+      status: this.statusSelect.selectedOption?.value || "",
     };
-    this.onShow();
+    this._renderDeals();
   }
 
-  _clearFilters() {
-    this.state.filters = { stage: "", desk: "", riskBand: "", dateRange: "" };
-    this.state.savedView = "DEFAULT";
-    this.dateRange.value = "";
-    this.onShow();
+  _resetFilters() {
+    this.state.filters = { stage: "", strategy: "", owner: "", status: "" };
+    this._renderDeals();
   }
 
-  _setLayerGovernance(host, payload) {
-    host.replaceChildren();
-    const strip = buildGovernanceStrip(payload);
-    if (strip) host.appendChild(strip);
+  _filteredDeals() {
+    return this.deals.filter((row) => {
+      const stageOk = !this.state.filters.stage || String(row.stage) === this.state.filters.stage;
+      const strategyOk = !this.state.filters.strategy || String(row.strategy) === this.state.filters.strategy;
+      const ownerOk = !this.state.filters.owner || String(row.owner) === this.state.filters.owner;
+      const statusOk = !this.state.filters.status || String(row.status) === this.state.filters.status;
+      return stageOk && strategyOk && ownerOk && statusOk;
+    });
   }
 
-  _renderAnalytical(pipelinePayload) {
-    const stageRowsSource = Array.isArray(pipelinePayload?.stage_rows)
-      ? pipelinePayload.stage_rows
-      : Array.isArray(pipelinePayload?.stages)
-        ? pipelinePayload.stages
-        : toItems(pipelinePayload);
+  _renderDeals() {
+    const rows = this._filteredDeals();
+    this.listHost.replaceChildren(buildEntityList(rows, (row) => this._selectDeal(row)));
+    this.leftMeta.textContent = `As of: ${safe(this.state.asOf)} • Fund: ${safe(this.fundId)}`;
 
-    const rows = stageRowsSource.map((row) => ({
-      stage: firstDefined(row.stage, row.pipeline_stage),
-      count: firstDefined(row.count, row.deals_count),
-      notional: formatCurrency(firstDefined(row.notional, row.total_notional, row.amount)),
-      delta: firstDefined(row.delta, row.delta_notional, row.change),
-    }));
+    if (!this.selectedDeal && rows.length) {
+      this._selectDeal(rows[0]);
+      return;
+    }
 
-    const columns = [
-      { key: "stage", label: "Stage", priority: "P1" },
-      { key: "count", label: "Count", priority: "P1" },
-      { key: "notional", label: "Notional", priority: "P1" },
-      { key: "delta", label: "Delta", priority: "P2" },
+    if (this.selectedDeal) {
+      const current = rows.find((row) => String(row.id) === String(this.selectedDeal.id));
+      if (current) {
+        this._selectDeal(current);
+        return;
+      }
+    }
+
+    if (!rows.length) {
+      this._selectDeal({
+        dealName: "Deals",
+        sponsor: "—",
+        stage: "—",
+        strategy: "—",
+        expectedIrr: "—",
+        notional: "—",
+      });
+    }
+  }
+
+  _selectDeal(row) {
+    this.selectedDeal = row;
+    this.detailHeader.titleText = safe(row.dealName, "Deal Detail");
+
+    this.detailMeta.replaceChildren();
+    const summary = document.createElement("span");
+    summary.textContent = [
+      `Sponsor: ${safe(row.sponsor)}`,
+      `Strategy: ${safe(row.strategy)}`,
+      `Expected IRR: ${safe(row.expectedIrr)}`,
+      `Notional: ${safe(row.notional)}`,
+    ].join(" • ");
+
+    this.detailMeta.append(summary, makeBadge(row.stage));
+
+    const overviewItems = [
+      { text: "Deal Name", description: safe(row.dealName) },
+      { text: "Sponsor", description: safe(row.sponsor) },
+      { text: "Stage", description: safe(row.stage) },
+      { text: "Strategy", description: safe(row.strategy) },
+      { text: "Expected IRR", description: safe(row.expectedIrr) },
+      { text: "Notional", description: safe(row.notional) },
     ];
 
-    this.pipelineByStageHost.replaceChildren(buildDenseTable(columns, rows));
-  }
-
-  _renderOperational(pipelinePayload) {
-    const queueSource = Array.isArray(pipelinePayload?.execution_queue)
-      ? pipelinePayload.execution_queue
-      : Array.isArray(pipelinePayload?.queue)
-        ? pipelinePayload.queue
-        : toItems(pipelinePayload);
-
-    const rows = queueSource.map((row) => ({
-      dealName: firstDefined(row.deal_name, row.deal, row.name, row.id),
-      sponsor: firstDefined(row.sponsor, row.sponsor_name),
-      strategy: firstDefined(row.strategy, row.deal_strategy),
-      stage: firstDefined(row.stage, row.pipeline_stage),
-      notional: formatCurrency(firstDefined(row.notional, row.total_notional, row.amount)),
-      expectedIrr: firstDefined(row.expected_irr, row.irr, row.target_irr),
-      owner: firstDefined(row.owner, row.desk_owner, row.ic_owner),
-      slaDueDate: firstDefined(row.sla_due_date, row.sla_due, row.slaDue),
-      priority: firstDefined(row.priority, row.priority_level, row.rank),
-      approvalStatus: firstDefined(row.approval_status, row.ic_status, row.status),
-    }));
-
-    const columns = [
-      { key: "dealName", label: "Deal Name", priority: "P1" },
-      { key: "sponsor", label: "Sponsor", priority: "P1" },
-      { key: "strategy", label: "Strategy", priority: "P2" },
-      { key: "stage", label: "Stage", priority: "P1" },
-      { key: "notional", label: "Notional", priority: "P1" },
-      { key: "expectedIrr", label: "Expected IRR", priority: "P2" },
-      { key: "owner", label: "Owner", priority: "P2" },
-      { key: "slaDueDate", label: "SLA Due Date", priority: "P1" },
-      { key: "priority", label: "Priority", priority: "P2" },
-      { key: "approvalStatus", label: "Approval Status", priority: "P1" },
-    ];
-
-    this.executionQueueHost.replaceChildren(buildDenseTable(columns, rows));
-  }
-
-  _renderMonitoring(pipelinePayload) {
-    const queue = Array.isArray(pipelinePayload?.pending_approvals)
-      ? pipelinePayload.pending_approvals
-      : Array.isArray(pipelinePayload?.approvals_queue)
-        ? pipelinePayload.approvals_queue
-        : [];
-
-    const queueItems = queue.slice(0, 10).map((item) => ({
-      text: firstDefined(item.deal_name, item.name, item.stage, "Pending approval"),
-      description: firstDefined(item.approval_status, item.ic_status, item.owner, item.message, item.status, "—"),
-    }));
-
-    this.pendingApprovalsHost.replaceChildren(buildQueueList(queueItems));
+    this.tabOverview.firstElementChild.replaceChildren(buildList(overviewItems));
+    this.tabMemo.firstElementChild.replaceChildren(buildList([{ text: "Investment Memo", description: safe(row.memoStatus, "Available") }]));
+    this.tabGovernance.firstElementChild.replaceChildren(buildList([{ text: "Governance Requirements", description: safe(row.approvalStatus, "In progress") }]));
+    this.tabDocuments.firstElementChild.replaceChildren(buildList([{ text: "Documents", description: safe(row.documentCount, "No records available") }]));
+    this.tabActivity.firstElementChild.replaceChildren(
+      buildList([
+        { text: "Last Update", description: safe(row.lastUpdated) },
+        { text: "Owner", description: safe(row.owner) },
+      ]),
+    );
   }
 
   async onShow() {
@@ -490,36 +363,39 @@ export class DealsPipelinePage {
     }
 
     try {
-      const params = {
-        limit: 100,
-        offset: 0,
-        stage: this.state.filters.stage,
-        desk: this.state.filters.desk,
-        risk_band: this.state.filters.riskBand,
-        date_range: this.state.filters.dateRange,
-        saved_view: this.state.savedView,
-      };
+      const payload = await dealsApi.listPipelineDeals(this.fundId, { limit: 200, offset: 0 });
 
-      const pipelineDeals = await dealsApi.listPipelineDeals(this.fundId, params);
+      const queueRows = Array.isArray(payload?.execution_queue)
+        ? payload.execution_queue
+        : Array.isArray(payload?.queue)
+          ? payload.queue
+          : toItems(payload);
 
-      this.state.asOf = getAsOf(pipelineDeals);
-      this._refreshCommandMeta();
+      this.deals = queueRows.map((row) => ({
+        id: firstDefined(row.id, row.deal_id, row.external_reference, row.deal_name),
+        dealName: firstDefined(row.deal_name, row.deal, row.name),
+        sponsor: firstDefined(row.sponsor, row.sponsor_name),
+        stage: firstDefined(row.stage, row.pipeline_stage),
+        strategy: firstDefined(row.strategy, row.deal_strategy),
+        expectedIrr: safe(firstDefined(row.expected_irr, row.irr, row.target_irr)),
+        notional: formatCurrency(firstDefined(row.notional, row.total_notional, row.amount)),
+        owner: firstDefined(row.owner, row.desk_owner, row.ic_owner),
+        status: firstDefined(row.approval_status, row.status, row.ic_status),
+        memoStatus: firstDefined(row.memo_status, row.ic_memo_status),
+        documentCount: firstDefined(row.document_count, row.attachments_count),
+        lastUpdated: formatDate(firstDefined(row.updated_at, row.created_at, row.timestamp)),
+      }));
 
-      const source = toItems(pipelineDeals);
-      setOptions(this.stageSelect, [...new Set(source.map((row) => firstDefined(row.stage, row.pipeline_stage)).filter(Boolean))], this.state.filters.stage);
-      setOptions(this.deskSelect, [...new Set(source.map((row) => firstDefined(row.desk, row.owner)).filter(Boolean))], this.state.filters.desk);
-      setOptions(this.riskBandSelect, [...new Set(source.map((row) => firstDefined(row.risk_band, row.riskBand)).filter(Boolean))], this.state.filters.riskBand);
+      this.state.asOf = formatDate(firstDefined(payload?.asOf, payload?.as_of, payload?.generated_at, payload?.timestamp));
 
-      this._setLayerGovernance(this.commandGovernanceHost, pipelineDeals);
-      this._setLayerGovernance(this.analyticalGovernanceHost, pipelineDeals);
-      this._setLayerGovernance(this.operationalGovernanceHost, pipelineDeals);
-      this._setLayerGovernance(this.monitoringGovernanceHost, pipelineDeals);
+      setOptions(this.stageSelect, [...new Set(this.deals.map((row) => row.stage).filter(Boolean))], this.state.filters.stage);
+      setOptions(this.strategySelect, [...new Set(this.deals.map((row) => row.strategy).filter(Boolean))], this.state.filters.strategy);
+      setOptions(this.ownerSelect, [...new Set(this.deals.map((row) => row.owner).filter(Boolean))], this.state.filters.owner);
+      setOptions(this.statusSelect, [...new Set(this.deals.map((row) => row.status).filter(Boolean))], this.state.filters.status);
 
-      this._renderAnalytical(pipelineDeals);
-      this._renderOperational(pipelineDeals);
-      this._renderMonitoring(pipelineDeals);
+      this._renderDeals();
     } catch (error) {
-      this._setError(error?.message ? String(error.message) : "Failed to load deals pipeline data");
+      this._setError(error?.message ? String(error.message) : "Failed to load deals data");
     } finally {
       this.busy.active = false;
     }

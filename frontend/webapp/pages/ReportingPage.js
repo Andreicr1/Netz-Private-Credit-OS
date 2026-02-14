@@ -120,7 +120,7 @@ function buildDenseTable(columns, rows) {
   headerRow.setAttribute("slot", "headerRow");
   columns.forEach((column) => {
     const headerCell = document.createElement("ui5-table-header-cell");
-    headerCell.textContent = `${column.label} ${column.priority}`;
+    headerCell.textContent = column.label;
     headerRow.appendChild(headerCell);
   });
   table.appendChild(headerRow);
@@ -164,7 +164,7 @@ export class ReportingPage {
         period: "",
         reportType: "",
       },
-      savedView: "DEFAULT",
+      savedView: "PUBLISHING",
       activeFiltersCount: 0,
       asOf: "—",
     };
@@ -176,7 +176,7 @@ export class ReportingPage {
     const pageTitle = document.createElement("ui5-dynamic-page-title");
     const heading = document.createElement("ui5-title");
     heading.level = "H1";
-    heading.textContent = "Reporting Packs";
+    heading.textContent = "Reporting";
     pageTitle.appendChild(heading);
     this.el.appendChild(pageTitle);
 
@@ -225,7 +225,7 @@ export class ReportingPage {
     left.setAttribute("slot", "startContent");
     const title = document.createElement("ui5-title");
     title.level = "H5";
-    title.textContent = "Reporting Command";
+    title.textContent = "Reporting Filters";
     left.appendChild(title);
 
     const right = document.createElement("div");
@@ -254,17 +254,17 @@ export class ReportingPage {
 
     this.savedViewSelect = document.createElement("ui5-select");
     this.savedViewSelect.accessibleName = "Saved View";
-    setOptions(this.savedViewSelect, ["DEFAULT", "PUBLISHING", "NAV"], this.state.savedView);
+    setOptions(this.savedViewSelect, ["PUBLISHING", "NAV"], this.state.savedView);
 
     const applyBtn = document.createElement("ui5-button");
     applyBtn.design = "Emphasized";
     applyBtn.textContent = "Apply";
     applyBtn.addEventListener("click", () => this._applyFilters());
 
-    const clearBtn = document.createElement("ui5-button");
-    clearBtn.design = "Transparent";
-    clearBtn.textContent = "Clear";
-    clearBtn.addEventListener("click", () => this._clearFilters());
+    const resetBtn = document.createElement("ui5-button");
+    resetBtn.design = "Default";
+    resetBtn.textContent = "Reset";
+    resetBtn.addEventListener("click", () => this._clearFilters());
 
     this.downloadBtn = document.createElement("ui5-button");
     this.downloadBtn.design = "Transparent";
@@ -276,7 +276,7 @@ export class ReportingPage {
     this.exportBtn.textContent = "Export Evidence Pack";
     this.exportBtn.addEventListener("click", () => this._exportEvidencePack());
 
-    controls.append(this.periodSelect, this.reportTypeSelect, this.savedViewSelect, applyBtn, clearBtn, this.downloadBtn, this.exportBtn);
+    controls.append(this.periodSelect, this.reportTypeSelect, this.savedViewSelect, applyBtn, resetBtn, this.downloadBtn, this.exportBtn);
     body.append(bar, controls);
     card.appendChild(body);
     return card;
@@ -288,7 +288,7 @@ export class ReportingPage {
 
     const header = document.createElement("ui5-card-header");
     header.titleText = "Layer 2 — Analytical";
-    header.subtitleText = "KPI strip";
+    header.subtitleText = "Reporting Overview";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -312,7 +312,7 @@ export class ReportingPage {
 
     const header = document.createElement("ui5-card-header");
     header.titleText = "Layer 3 — Operational";
-    header.subtitleText = "Report Packs Table (dense)";
+    header.subtitleText = "Published Reports";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -336,7 +336,7 @@ export class ReportingPage {
 
     const header = document.createElement("ui5-card-header");
     header.titleText = "Layer 4 — Monitoring";
-    header.subtitleText = "Missing Reports Alerts";
+    header.subtitleText = "Outstanding Deliverables";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -347,7 +347,7 @@ export class ReportingPage {
     body.appendChild(this.monitoringGovernanceHost);
 
     const panel = document.createElement("ui5-panel");
-    panel.headerText = "Missing Reports Alerts";
+    panel.headerText = "Outstanding Deliverables";
     this.alertsHost = document.createElement("div");
     panel.appendChild(this.alertsHost);
 
@@ -368,12 +368,12 @@ export class ReportingPage {
 
   _refreshCommandMeta() {
     this.state.activeFiltersCount = [this.state.filters.period, this.state.filters.reportType].filter(Boolean).length;
-    this.activeFiltersTag.textContent = `activeFiltersCount ${this.state.activeFiltersCount}`;
-    this.asOfTag.textContent = `asOf ${this.state.asOf}`;
+    this.activeFiltersTag.textContent = `Filters ${this.state.activeFiltersCount}`;
+    this.asOfTag.textContent = `As of: ${this.state.asOf}`;
   }
 
   _applyFilters() {
-    this.state.savedView = String(this.savedViewSelect.selectedOption?.value || "DEFAULT");
+    this.state.savedView = String(this.savedViewSelect.selectedOption?.value || "PUBLISHING");
     this.state.filters = {
       period: this.periodSelect.selectedOption?.value || "",
       reportType: this.reportTypeSelect.selectedOption?.value || "",
@@ -383,7 +383,7 @@ export class ReportingPage {
 
   _clearFilters() {
     this.state.filters = { period: "", reportType: "" };
-    this.state.savedView = "DEFAULT";
+    this.state.savedView = "PUBLISHING";
     this.onShow();
   }
 
@@ -444,7 +444,7 @@ export class ReportingPage {
         description: `${safe(firstDefined(row.period_month, row.period), "—")} • ${safe(firstDefined(row.status, row.workflow_status), "—")}`,
       }));
 
-    this.alertsHost.replaceChildren(buildList(alerts, "No missing reports alerts."));
+    this.alertsHost.replaceChildren(buildList(alerts, "No outstanding deliverables."));
   }
 
   _resolveLatestPublished(rows) {

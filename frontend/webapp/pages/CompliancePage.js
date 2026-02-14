@@ -121,7 +121,7 @@ function buildDenseTable(columns, rows) {
   headerRow.setAttribute("slot", "headerRow");
   columns.forEach((column) => {
     const headerCell = document.createElement("ui5-table-header-cell");
-    headerCell.textContent = `${column.label} ${column.priority}`;
+    headerCell.textContent = column.label;
     headerRow.appendChild(headerCell);
   });
   table.appendChild(headerRow);
@@ -172,7 +172,7 @@ export class CompliancePage {
         dueWindow: "",
         owner: "",
       },
-      savedView: "DEFAULT",
+      savedView: "REGULATORY",
       activeFiltersCount: 0,
       asOf: "—",
     };
@@ -231,7 +231,7 @@ export class CompliancePage {
     left.setAttribute("slot", "startContent");
     const title = document.createElement("ui5-title");
     title.level = "H5";
-    title.textContent = "Compliance Command";
+    title.textContent = "Compliance Filters";
     left.appendChild(title);
 
     const right = document.createElement("div");
@@ -263,19 +263,19 @@ export class CompliancePage {
 
     this.savedViewSelect = document.createElement("ui5-select");
     this.savedViewSelect.accessibleName = "Saved View";
-    setOptions(this.savedViewSelect, ["DEFAULT", "REGULATORY", "AUDIT"], this.state.savedView);
+    setOptions(this.savedViewSelect, ["REGULATORY", "AUDIT"], this.state.savedView);
 
     const applyBtn = document.createElement("ui5-button");
     applyBtn.design = "Emphasized";
     applyBtn.textContent = "Apply";
     applyBtn.addEventListener("click", () => this._applyFilters());
 
-    const clearBtn = document.createElement("ui5-button");
-    clearBtn.design = "Transparent";
-    clearBtn.textContent = "Clear";
-    clearBtn.addEventListener("click", () => this._clearFilters());
+    const resetBtn = document.createElement("ui5-button");
+    resetBtn.design = "Default";
+    resetBtn.textContent = "Reset";
+    resetBtn.addEventListener("click", () => this._clearFilters());
 
-    controls.append(this.obligationTypeSelect, this.dueWindowSelect, this.ownerSelect, this.savedViewSelect, applyBtn, clearBtn);
+    controls.append(this.obligationTypeSelect, this.dueWindowSelect, this.ownerSelect, this.savedViewSelect, applyBtn, resetBtn);
     body.append(bar, controls);
     card.appendChild(body);
     return card;
@@ -287,7 +287,7 @@ export class CompliancePage {
 
     const header = document.createElement("ui5-card-header");
     header.titleText = "Layer 2 — Analytical";
-    header.subtitleText = "KPI strip";
+    header.subtitleText = "Compliance Overview";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -311,7 +311,7 @@ export class CompliancePage {
 
     const header = document.createElement("ui5-card-header");
     header.titleText = "Layer 3 — Operational";
-    header.subtitleText = "Covenant + Compliance obligations (dense)";
+    header.subtitleText = "Covenant Monitoring and Obligation Register";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -323,7 +323,7 @@ export class CompliancePage {
 
     this.covenantCard = document.createElement("ui5-card");
     const covenantHeader = document.createElement("ui5-card-header");
-    covenantHeader.titleText = "Covenant Dashboard Table";
+    covenantHeader.titleText = "Covenant Monitoring";
     covenantHeader.subtitleText = "Audit-grade covenant monitoring";
     covenantHeader.setAttribute("slot", "header");
     this.covenantCard.appendChild(covenantHeader);
@@ -333,8 +333,8 @@ export class CompliancePage {
 
     this.obligationCard = document.createElement("ui5-card");
     const obligationHeader = document.createElement("ui5-card-header");
-    obligationHeader.titleText = "Compliance Obligations Table";
-    obligationHeader.subtitleText = "Backend-created obligations";
+    obligationHeader.titleText = "Obligation Register";
+    obligationHeader.subtitleText = "Institutional obligations";
     obligationHeader.setAttribute("slot", "header");
     this.obligationCard.appendChild(obligationHeader);
     this.obligationsHost = document.createElement("div");
@@ -353,7 +353,7 @@ export class CompliancePage {
 
     const header = document.createElement("ui5-card-header");
     header.titleText = "Layer 4 — Monitoring";
-    header.subtitleText = "Breach Alerts + Governance Panel";
+    header.subtitleText = "Compliance Alerts and Governance Notes";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -367,16 +367,16 @@ export class CompliancePage {
     this.monitorGrid.className = "netz-wave-monitor-grid";
 
     this.breachPanel = document.createElement("ui5-panel");
-    this.breachPanel.headerText = "Breach Alerts";
+    this.breachPanel.headerText = "Compliance Alerts";
     this.breachHost = document.createElement("div");
     this.breachPanel.appendChild(this.breachHost);
 
     this.governancePanel = document.createElement("ui5-panel");
-    this.governancePanel.headerText = "Governance Panel";
+    this.governancePanel.headerText = "Governance Notes";
     this.covenantIntegrationStrip = document.createElement("ui5-message-strip");
     this.covenantIntegrationStrip.design = "Information";
     this.covenantIntegrationStrip.hideCloseButton = true;
-    this.covenantIntegrationStrip.textContent = "Covenant breach obligations are backend-created; frontend is render-only.";
+    this.covenantIntegrationStrip.textContent = "Covenant obligations are tracked and surfaced for review.";
     this.governancePanel.appendChild(this.covenantIntegrationStrip);
     this.governanceHost = document.createElement("div");
     this.governancePanel.appendChild(this.governanceHost);
@@ -404,12 +404,12 @@ export class CompliancePage {
       this.state.filters.owner,
     ].filter(Boolean).length;
 
-    this.activeFiltersTag.textContent = `activeFiltersCount ${this.state.activeFiltersCount}`;
-    this.asOfTag.textContent = `asOf ${this.state.asOf}`;
+    this.activeFiltersTag.textContent = `Filters ${this.state.activeFiltersCount}`;
+    this.asOfTag.textContent = `As of: ${this.state.asOf}`;
   }
 
   _applyFilters() {
-    this.state.savedView = String(this.savedViewSelect.selectedOption?.value || "DEFAULT");
+    this.state.savedView = String(this.savedViewSelect.selectedOption?.value || "REGULATORY");
     this.state.filters = {
       obligationType: this.obligationTypeSelect.selectedOption?.value || "",
       dueWindow: this.dueWindowSelect.selectedOption?.value || "",
@@ -420,7 +420,7 @@ export class CompliancePage {
 
   _clearFilters() {
     this.state.filters = { obligationType: "", dueWindow: "", owner: "" };
-    this.state.savedView = "DEFAULT";
+    this.state.savedView = "REGULATORY";
     this.onShow();
   }
 
@@ -489,8 +489,8 @@ export class CompliancePage {
     const columns = [
       { key: "covenant", label: "Covenant", priority: "P1" },
       { key: "threshold", label: "Threshold", priority: "P1" },
-      { key: "actual", label: "Actual (backend)", priority: "P1" },
-      { key: "breachFlag", label: "BreachFlag (backend)", priority: "P1" },
+      { key: "actual", label: "Actual", priority: "P1" },
+      { key: "breachFlag", label: "Breach Flag", priority: "P1" },
       { key: "lastTested", label: "Last Tested", priority: "P2" },
       { key: "evidenceLink", label: "Evidence Link", priority: "P2" },
     ];
@@ -539,21 +539,21 @@ export class CompliancePage {
 
     const governanceItems = [
       {
-        text: "asOf",
+        text: "As of",
         description: safe(this.state.asOf),
       },
       {
-        text: "activeFiltersCount",
+        text: "Filters Applied",
         description: safe(this.state.activeFiltersCount),
       },
       {
-        text: "savedView",
+        text: "View",
         description: safe(this.state.savedView),
       },
     ];
 
-    this.breachHost.replaceChildren(buildList(breachItems, "No breach alerts."));
-    this.governanceHost.replaceChildren(buildList(covenantObligationItems.length ? covenantObligationItems : governanceItems, covenantObligationItems.length ? "No covenant obligations." : "No governance controls."));
+    this.breachHost.replaceChildren(buildList(breachItems, "No alerts available."));
+    this.governanceHost.replaceChildren(buildList(covenantObligationItems.length ? covenantObligationItems : governanceItems, covenantObligationItems.length ? "No covenant obligations available." : "No governance notes available."));
   }
 
   async onShow() {

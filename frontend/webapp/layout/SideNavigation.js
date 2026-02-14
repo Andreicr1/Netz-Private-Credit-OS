@@ -25,7 +25,6 @@ export class SideNavigation {
     // ── Governance ──
     this._addGroupHeader("Governance");
     this._addItem({ label: "Compliance", route: "/compliance", icon: "shield" });
-    this._addItem({ label: "Actions", route: "/actions", icon: "sys-enter-2" });
 
     // ── Documents ──
     this._addGroupHeader("Documents");
@@ -35,11 +34,6 @@ export class SideNavigation {
     // ── Reporting ──
     this._addGroupHeader("Reporting");
     this._addItem({ label: "Reporting", route: "/reporting", icon: "pie-chart" });
-
-    // ── Admin ──
-    this._addGroupHeader("Admin");
-    this._addItem({ label: "Admin", route: "/admin", icon: "settings" });
-    this._addItem({ label: "Audit Log", route: "/audit-log", icon: "history" });
   }
 
   _addGroupHeader(text) {

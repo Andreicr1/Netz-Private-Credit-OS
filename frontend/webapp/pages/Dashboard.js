@@ -113,7 +113,7 @@ function buildDenseTable(columns, rows) {
   headerRow.setAttribute("slot", "headerRow");
   columns.forEach((column) => {
     const headerCell = document.createElement("ui5-table-header-cell");
-    headerCell.textContent = `${column.label} ${column.priority}`;
+    headerCell.textContent = column.label;
     headerRow.appendChild(headerCell);
   });
   table.appendChild(headerRow);
@@ -155,7 +155,7 @@ export class DashboardPage {
     this.state = {
       asOf: "—",
       activeFiltersCount: 1,
-      view: "BOARD",
+      view: "INSTITUTIONAL",
     };
 
     this.el = document.createElement("ui5-dynamic-page");
@@ -163,7 +163,7 @@ export class DashboardPage {
     const pageTitle = document.createElement("ui5-dynamic-page-title");
     const heading = document.createElement("ui5-title");
     heading.level = "H1";
-    heading.textContent = "Governance Board Control Center";
+    heading.textContent = "Dashboard";
     pageTitle.appendChild(heading);
     this.el.appendChild(pageTitle);
 
@@ -194,8 +194,8 @@ export class DashboardPage {
     card.className = "netz-wave-layer-card";
 
     const header = document.createElement("ui5-card-header");
-    header.titleText = "Governance.Command.Header";
-    header.subtitleText = "Board governance context";
+    header.titleText = "Layer 1 — Command";
+    header.subtitleText = "Dashboard filters";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -212,7 +212,7 @@ export class DashboardPage {
     left.setAttribute("slot", "startContent");
     const title = document.createElement("ui5-title");
     title.level = "H5";
-    title.textContent = "Board Command";
+    title.textContent = "Dashboard Filters";
     left.appendChild(title);
 
     const right = document.createElement("div");
@@ -241,8 +241,8 @@ export class DashboardPage {
     card.className = "netz-wave-layer-card";
 
     const header = document.createElement("ui5-card-header");
-    header.titleText = "Governance.Analytical.RiskSummary";
-    header.subtitleText = "Board risk summary";
+    header.titleText = "Layer 2 — Analytical";
+    header.subtitleText = "Dashboard overview";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -265,8 +265,8 @@ export class DashboardPage {
     card.className = "netz-wave-layer-card";
 
     const header = document.createElement("ui5-card-header");
-    header.titleText = "Governance.Operational.ActionsQueue";
-    header.subtitleText = "Pending approvals + governed actions";
+    header.titleText = "Layer 3 — Operational";
+    header.subtitleText = "Operational queue";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -289,8 +289,8 @@ export class DashboardPage {
     card.className = "netz-wave-layer-card";
 
     const header = document.createElement("ui5-card-header");
-    header.titleText = "Governance.Monitoring.AuditExceptions";
-    header.subtitleText = "Audit exceptions backend-driven";
+    header.titleText = "Layer 4 — Monitoring";
+    header.subtitleText = "Exceptions and alerts";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -301,7 +301,7 @@ export class DashboardPage {
     body.appendChild(this.monitoringGovernanceHost);
 
     const panel = document.createElement("ui5-panel");
-    panel.headerText = "Audit Exceptions";
+    panel.headerText = "Exceptions and Alerts";
     this.auditExceptionsHost = document.createElement("div");
     panel.appendChild(this.auditExceptionsHost);
 
@@ -322,8 +322,8 @@ export class DashboardPage {
 
   _refreshCommandMeta() {
     this.fundTag.textContent = `fund ${safe(this.fundId)}`;
-    this.asOfTag.textContent = `asOf ${this.state.asOf}`;
-    this.activeTag.textContent = `activeFiltersCount ${safe(this.state.activeFiltersCount)}`;
+    this.asOfTag.textContent = `As of: ${this.state.asOf}`;
+    this.activeTag.textContent = `Filters ${safe(this.state.activeFiltersCount)}`;
   }
 
   _setLayerGovernance(host, payload) {
@@ -460,7 +460,7 @@ export class DashboardPage {
       this._renderOperational(viewData);
       this._renderMonitoring(viewData);
     } catch (error) {
-      this._setError(error?.message ? String(error.message) : "Failed to load governance board data");
+      this._setError(error?.message ? String(error.message) : "Failed to load dashboard data");
     } finally {
       this.busy.active = false;
     }

@@ -1,7 +1,5 @@
 import * as portfolioApi from "../api/portfolio.js";
 
-const LATENCY_THRESHOLD = 300;
-
 function safe(value, fallback = "—") {
   if (value === null || value === undefined || value === "") return fallback;
   return String(value);
@@ -42,46 +40,12 @@ function formatCurrency(value) {
   });
 }
 
-function formatPercent(value) {
-  if (value === null || value === undefined || value === "") return "—";
-  const number = Number(value);
-  if (Number.isNaN(number)) return safe(value);
-  return `${number.toFixed(2)}%`;
-}
-
 function getAsOf(...payloads) {
   for (const payload of payloads) {
     const asOf = firstDefined(payload?.asOf, payload?.as_of, payload?.timestamp, payload?.generated_at);
     if (asOf) return formatDate(asOf);
   }
   return "—";
-}
-
-function getGovernanceSignal(payload, fallbackThreshold = LATENCY_THRESHOLD) {
-  const latency = Number(firstDefined(payload?.dataLatency, payload?.data_latency, payload?.latency_ms));
-  const threshold = Number(firstDefined(payload?.dataLatencyThreshold, payload?.latency_threshold, fallbackThreshold));
-  const quality = safe(firstDefined(payload?.dataQuality, payload?.data_quality), "OK");
-
-  if ((!Number.isNaN(latency) && !Number.isNaN(threshold) && latency > threshold) || quality !== "OK") {
-    return {
-      latency: Number.isNaN(latency) ? null : latency,
-      threshold: Number.isNaN(threshold) ? fallbackThreshold : threshold,
-      quality,
-    };
-  }
-  return null;
-}
-
-function buildGovernanceStrip(payload) {
-  const signal = getGovernanceSignal(payload);
-  if (!signal) return null;
-
-  const strip = document.createElement("ui5-message-strip");
-  strip.design = "Warning";
-  strip.hideCloseButton = true;
-  const latencyText = signal.latency == null ? "n/a" : `${signal.latency}ms`;
-  strip.textContent = `Data governance warning — latency ${latencyText} (threshold ${signal.threshold}ms), quality ${signal.quality}.`;
-  return strip;
 }
 
 function setOptions(select, options, selected) {
@@ -119,81 +83,66 @@ function selectedMultiValues(combo) {
   return Array.from(combo.querySelectorAll("ui5-mcb-item")).filter((item) => item.selected).map((item) => String(item.value || item.text || "").trim()).filter(Boolean);
 }
 
-function buildDenseTable(columns, rows) {
-  const viewportWidth = window.innerWidth || 1440;
-  const visibleColumns = viewportWidth <= 960
-    ? columns.filter((column) => column.priority === "P1")
-    : viewportWidth <= 1280
-      ? columns.filter((column) => column.priority !== "P3")
-      : columns;
-  const hiddenColumns = columns.filter((column) => !visibleColumns.includes(column));
-
-  const table = document.createElement("ui5-table");
-  table.className = "netz-wave-table-dense";
-
-  const headerRow = document.createElement("ui5-table-header-row");
-  headerRow.setAttribute("slot", "headerRow");
-  visibleColumns.forEach((column) => {
-    const cell = document.createElement("ui5-table-header-cell");
-    cell.textContent = `${column.label} ${column.priority}`;
-    headerRow.appendChild(cell);
-  });
-  if (hiddenColumns.length) {
-    const detailsHeader = document.createElement("ui5-table-header-cell");
-    detailsHeader.textContent = "Details P1";
-    headerRow.appendChild(detailsHeader);
-  }
-  table.appendChild(headerRow);
-
-  rows.forEach((row) => {
-    const tr = document.createElement("ui5-table-row");
-    visibleColumns.forEach((column) => {
-      const td = document.createElement("ui5-table-cell");
-      td.textContent = safe(row[column.key]);
-      tr.appendChild(td);
-    });
-
-    if (hiddenColumns.length) {
-      const detailsCell = document.createElement("ui5-table-cell");
-      const button = document.createElement("ui5-button");
-      button.design = "Transparent";
-      button.textContent = "View";
-
-      const popover = document.createElement("ui5-responsive-popover");
-      popover.headerText = "Collapsed Columns";
-      const list = document.createElement("ui5-list");
-      hiddenColumns.forEach((column) => {
-        const item = document.createElement("ui5-li");
-        item.textContent = column.label;
-        item.description = safe(row[column.key]);
-        list.appendChild(item);
-      });
-      popover.appendChild(list);
-      button.addEventListener("click", () => popover.showAt(button));
-
-      detailsCell.append(button, popover);
-      tr.appendChild(detailsCell);
-    }
-
-    table.appendChild(tr);
-  });
-
-  return table;
+function makeStatusBadge(text) {
+  const status = document.createElement("ui5-tag");
+  const normalized = String(text || "").toLowerCase();
+  status.textContent = safe(text, "—");
+  status.design = normalized.includes("breach") || normalized.includes("late") || normalized.includes("overdue")
+    ? "Negative"
+    : normalized.includes("watch") || normalized.includes("pending")
+      ? "Critical"
+      : "Positive";
+  return status;
 }
 
-function buildList(items, emptyText) {
+function buildItemList(rows, onSelect) {
+  const list = document.createElement("ui5-list");
+  if (!rows.length) {
+    const empty = document.createElement("ui5-li");
+    empty.textContent = "No records available.";
+    list.appendChild(empty);
+    return list;
+  }
+
+  rows.forEach((row) => {
+    const item = document.createElement("ui5-li-custom");
+    const wrap = document.createElement("div");
+    wrap.className = "netz-fcl-list-item";
+
+    const title = document.createElement("div");
+    title.className = "netz-fcl-list-title";
+    title.textContent = safe(row.borrowerName);
+
+    const meta = document.createElement("div");
+    meta.className = "netz-fcl-list-meta";
+    meta.textContent = `${safe(row.exposure)} • Risk ${safe(row.riskBand)}`;
+
+    const badgeWrap = document.createElement("div");
+    badgeWrap.className = "netz-fcl-list-badge";
+    badgeWrap.appendChild(makeStatusBadge(row.covenantStatus));
+
+    wrap.append(title, meta, badgeWrap);
+    item.appendChild(wrap);
+    item.addEventListener("click", () => onSelect(row));
+    list.appendChild(item);
+  });
+
+  return list;
+}
+
+function buildOverviewList(items) {
   const list = document.createElement("ui5-list");
   if (!items.length) {
-    const li = document.createElement("ui5-li");
-    li.textContent = emptyText;
-    list.appendChild(li);
+    const empty = document.createElement("ui5-li");
+    empty.textContent = "No records available.";
+    list.appendChild(empty);
     return list;
   }
 
   items.forEach((item) => {
     const li = document.createElement("ui5-li");
     li.textContent = safe(item.text);
-    if (item.description) li.description = safe(item.description);
+    li.description = safe(item.description);
     list.appendChild(li);
   });
   return list;
@@ -204,15 +153,20 @@ export class PortfolioPage {
     this.fundId = fundId;
     this.state = {
       filters: {
-        vehicle: "",
+        investmentType: "",
         borrower: [],
         riskBand: [],
-        dateRange: "",
       },
-      savedView: "DEFAULT",
-      activeFiltersCount: 0,
+      listView: "BORROWERS",
       asOf: "—",
+      investmentTypes: [],
     };
+    this.data = {
+      borrowers: [],
+      facilities: [],
+      alerts: [],
+    };
+    this.selectedItem = null;
 
     this.el = document.createElement("ui5-dynamic-page");
 
@@ -235,160 +189,132 @@ export class PortfolioPage {
     this.errorStrip.style.display = "none";
     content.appendChild(this.errorStrip);
 
-    this.commandLayer = this._buildCommandLayer();
-    this.operationalLayer = this._buildOperationalLayer();
-    this.monitoringLayer = this._buildMonitoringLayer();
+    const layout = document.createElement("div");
+    layout.className = "netz-fcl-layout";
 
-    content.append(this.commandLayer, this.operationalLayer, this.monitoringLayer);
+    this.leftColumn = this._buildLeftColumn();
+    this.rightColumn = this._buildRightColumn();
+    layout.append(this.leftColumn, this.rightColumn);
+
+    content.appendChild(layout);
     this.busy.appendChild(content);
     this.el.appendChild(this.busy);
   }
 
-  _buildCommandLayer() {
-    const card = document.createElement("ui5-card");
-    card.className = "netz-wave-layer-card";
+  _buildLeftColumn() {
+    const column = document.createElement("ui5-card");
+    column.className = "netz-fcl-column";
 
     const header = document.createElement("ui5-card-header");
-    header.titleText = "Layer 1 — Command";
-    header.subtitleText = "Filters, saved view and execution scope";
+    header.titleText = "Portfolio Navigation";
+    header.subtitleText = "Borrowers and Facilities";
     header.setAttribute("slot", "header");
-    card.appendChild(header);
+    column.appendChild(header);
 
     const body = document.createElement("div");
-    body.className = "netz-wave-layer-body";
-
-    this.commandGovernanceHost = document.createElement("div");
-    body.appendChild(this.commandGovernanceHost);
-
-    const bar = document.createElement("ui5-bar");
-    bar.className = "netz-wave-command-bar";
-
-    const left = document.createElement("div");
-    left.setAttribute("slot", "startContent");
-    const title = document.createElement("ui5-title");
-    title.level = "H5";
-    title.textContent = "Fund + Portfolio Snapshot";
-    left.appendChild(title);
-
-    const right = document.createElement("div");
-    right.className = "netz-wave-command-meta";
-    right.setAttribute("slot", "endContent");
-
-    this.activeFiltersTag = document.createElement("ui5-tag");
-    this.activeFiltersTag.design = "Information";
-    right.appendChild(this.activeFiltersTag);
-
-    this.asOfTag = document.createElement("ui5-tag");
-    this.asOfTag.design = "Neutral";
-    right.appendChild(this.asOfTag);
-
-    this.fundTag = document.createElement("ui5-tag");
-    this.fundTag.design = "Set2";
-    right.appendChild(this.fundTag);
-
-    bar.append(left, right);
+    body.className = "netz-fcl-column-body";
 
     const controls = document.createElement("div");
-    controls.className = "netz-wave-command-controls";
+    controls.className = "netz-fcl-controls";
 
-    this.vehicleSelect = document.createElement("ui5-select");
+    this.listViewSelect = document.createElement("ui5-select");
+    this.listViewSelect.accessibleName = "Navigation";
+    setOptions(this.listViewSelect, ["Borrowers", "Facilities"], "Borrowers");
+    this.listViewSelect.addEventListener("change", () => {
+      this.state.listView = this.listViewSelect.selectedOption?.value === "Facilities" ? "FACILITIES" : "BORROWERS";
+      this._renderLeftList();
+    });
+
+    this.investmentTypeSelect = document.createElement("ui5-select");
+    this.investmentTypeSelect.accessibleName = "Investment Type";
+    this.investmentTypeSelect.addEventListener("change", () => {
+      this.state.filters.investmentType = this.investmentTypeSelect.selectedOption?.value || "";
+      this.onShow();
+    });
+
     this.borrowerCombo = document.createElement("ui5-multi-combobox");
-    this.riskBandCombo = document.createElement("ui5-multi-combobox");
-    this.dateRange = document.createElement("ui5-date-range-picker");
-    this.savedViewSelect = document.createElement("ui5-select");
-
-    this.vehicleSelect.accessibleName = "Vehicle";
     this.borrowerCombo.accessibleName = "Borrower";
-    this.riskBandCombo.accessibleName = "Risk Band";
-    this.dateRange.accessibleName = "Date Range";
-    this.savedViewSelect.accessibleName = "Saved View";
 
-    setOptions(this.savedViewSelect, ["DEFAULT", "RISK_COMMITTEE", "CREDIT_DESK"], this.state.savedView);
+    this.riskBandCombo = document.createElement("ui5-multi-combobox");
+    this.riskBandCombo.accessibleName = "Risk Band";
+
+    this.newTypeInput = document.createElement("ui5-input");
+    this.newTypeInput.placeholder = "New investment type";
+
+    const addTypeBtn = document.createElement("ui5-button");
+    addTypeBtn.textContent = "Add Type";
+    addTypeBtn.design = "Transparent";
+    addTypeBtn.addEventListener("click", () => this._addInvestmentType());
 
     const applyBtn = document.createElement("ui5-button");
     applyBtn.design = "Emphasized";
     applyBtn.textContent = "Apply";
     applyBtn.addEventListener("click", () => this._applyFilters());
 
-    const clearBtn = document.createElement("ui5-button");
-    clearBtn.design = "Transparent";
-    clearBtn.textContent = "Clear";
-    clearBtn.addEventListener("click", () => this._clearFilters());
+    const resetBtn = document.createElement("ui5-button");
+    resetBtn.design = "Default";
+    resetBtn.textContent = "Reset";
+    resetBtn.addEventListener("click", () => this._resetFilters());
 
-    controls.append(this.vehicleSelect, this.borrowerCombo, this.riskBandCombo, this.dateRange, this.savedViewSelect, applyBtn, clearBtn);
+    controls.append(
+      this.listViewSelect,
+      this.investmentTypeSelect,
+      this.borrowerCombo,
+      this.riskBandCombo,
+      this.newTypeInput,
+      addTypeBtn,
+      applyBtn,
+      resetBtn,
+    );
 
-    body.append(bar, controls);
-    card.appendChild(body);
-    return card;
+    this.leftMeta = document.createElement("div");
+    this.leftMeta.className = "netz-fcl-meta";
+
+    this.listHost = document.createElement("div");
+
+    body.append(controls, this.leftMeta, this.listHost);
+    column.appendChild(body);
+    return column;
   }
 
-  _buildOperationalLayer() {
-    const card = document.createElement("ui5-card");
-    card.className = "netz-wave-layer-card";
+  _buildRightColumn() {
+    const column = document.createElement("ui5-card");
+    column.className = "netz-fcl-column";
 
     const header = document.createElement("ui5-card-header");
-    header.titleText = "Layer 3 — Operational";
-    header.subtitleText = "Audit-grade dense tables";
+    header.titleText = "Borrower Detail";
     header.setAttribute("slot", "header");
-    card.appendChild(header);
+    this.detailHeader = header;
+    column.appendChild(header);
 
     const body = document.createElement("div");
-    body.className = "netz-wave-layer-body";
+    body.className = "netz-fcl-column-body";
 
-    this.operationalGovernanceHost = document.createElement("div");
-    body.appendChild(this.operationalGovernanceHost);
+    this.detailMeta = document.createElement("div");
+    this.detailMeta.className = "netz-fcl-detail-meta";
 
-    this.borrowersCard = document.createElement("ui5-card");
-    const borrowersHeader = document.createElement("ui5-card-header");
-    borrowersHeader.titleText = "Borrowers Table";
-    borrowersHeader.subtitleText = "Institutional operating table";
-    borrowersHeader.setAttribute("slot", "header");
-    this.borrowersCard.appendChild(borrowersHeader);
-    this.borrowersHost = document.createElement("div");
-    this.borrowersHost.className = "netz-wave-table-host";
-    this.borrowersCard.appendChild(this.borrowersHost);
+    this.tabs = document.createElement("ui5-tabcontainer");
+    this.tabs.className = "netz-fcl-tabs";
 
-    this.loansCard = document.createElement("ui5-card");
-    const loansHeader = document.createElement("ui5-card-header");
-    loansHeader.titleText = "Loans Table";
-    loansHeader.subtitleText = "Institutional operating table";
-    loansHeader.setAttribute("slot", "header");
-    this.loansCard.appendChild(loansHeader);
-    this.loansHost = document.createElement("div");
-    this.loansHost.className = "netz-wave-table-host";
-    this.loansCard.appendChild(this.loansHost);
+    this.tabOverview = this._createTab("overview", "Overview");
+    this.tabFacilities = this._createTab("facilities", "Facilities");
+    this.tabCovenants = this._createTab("covenants", "Covenants");
+    this.tabDocuments = this._createTab("documents", "Documents");
 
-    body.append(this.borrowersCard, this.loansCard);
-    card.appendChild(body);
-    return card;
+    this.tabs.append(this.tabOverview, this.tabFacilities, this.tabCovenants, this.tabDocuments);
+    body.append(this.detailMeta, this.tabs);
+    column.appendChild(body);
+    return column;
   }
 
-  _buildMonitoringLayer() {
-    const card = document.createElement("ui5-card");
-    card.className = "netz-wave-layer-card";
-
-    const header = document.createElement("ui5-card-header");
-    header.titleText = "Layer 4 — Monitoring";
-    header.subtitleText = "Backend-driven alerts only";
-    header.setAttribute("slot", "header");
-    card.appendChild(header);
-
-    const body = document.createElement("div");
-    body.className = "netz-wave-layer-body";
-
-    this.monitoringGovernanceHost = document.createElement("div");
-    body.appendChild(this.monitoringGovernanceHost);
-
-    const panel = document.createElement("ui5-panel");
-    panel.headerText = "Alerts Panel";
-
-    this.monitoringContent = document.createElement("div");
-    this.monitoringContent.className = "netz-wave-monitor-grid";
-    panel.appendChild(this.monitoringContent);
-
-    body.appendChild(panel);
-    card.appendChild(body);
-    return card;
+  _createTab(id, text) {
+    const tab = document.createElement("ui5-tab");
+    tab.id = id;
+    tab.text = text;
+    const content = document.createElement("div");
+    content.className = "netz-fcl-tab-content";
+    tab.appendChild(content);
+    return tab;
   }
 
   _setError(message) {
@@ -401,118 +327,128 @@ export class PortfolioPage {
     this.errorStrip.style.display = "none";
   }
 
-  _refreshCommandMeta() {
-    this.state.activeFiltersCount = [
-      this.state.filters.vehicle,
-      this.state.filters.dateRange,
-      ...(this.state.filters.borrower || []),
-      ...(this.state.filters.riskBand || []),
-    ].filter(Boolean).length;
-
-    this.activeFiltersTag.textContent = `activeFiltersCount ${this.state.activeFiltersCount}`;
-    this.asOfTag.textContent = `asOf ${this.state.asOf}`;
-    this.fundTag.textContent = `fund ${safe(this.fundId)}`;
+  _refreshMeta() {
+    this.leftMeta.textContent = `As of: ${safe(this.state.asOf)} • Fund: ${safe(this.fundId)}`;
   }
 
   _applyFilters() {
-    const selectedView = this.savedViewSelect.selectedOption?.value || "DEFAULT";
-    this.state.savedView = String(selectedView);
     this.state.filters = {
-      vehicle: this.vehicleSelect.selectedOption?.value || "",
+      investmentType: this.investmentTypeSelect.selectedOption?.value || "",
       borrower: selectedMultiValues(this.borrowerCombo),
       riskBand: selectedMultiValues(this.riskBandCombo),
-      dateRange: this.dateRange.value || "",
     };
     this.onShow();
   }
 
-  _clearFilters() {
-    this.state.filters = { vehicle: "", borrower: [], riskBand: [], dateRange: "" };
-    this.state.savedView = "DEFAULT";
-    this.vehicleSelect.selectedIndex = 0;
-    this.dateRange.value = "";
-    setOptions(this.savedViewSelect, ["DEFAULT", "RISK_COMMITTEE", "CREDIT_DESK"], this.state.savedView);
+  _resetFilters() {
+    this.state.filters = { investmentType: "", borrower: [], riskBand: [] };
     this.onShow();
   }
 
-  _setLayerGovernance(host, payload) {
-    host.replaceChildren();
-    const strip = buildGovernanceStrip(payload);
-    if (strip) host.appendChild(strip);
+  _addInvestmentType() {
+    const newType = String(this.newTypeInput.value || "").trim();
+    if (!newType) return;
+
+    if (!this.state.investmentTypes.includes(newType)) {
+      this.state.investmentTypes = [...this.state.investmentTypes, newType].sort((a, b) => a.localeCompare(b));
+    }
+    this.state.filters.investmentType = newType;
+    this.newTypeInput.value = "";
+    this._syncInvestmentTypeOptions();
   }
 
-  _renderOperational(payload) {
-    const borrowerRows = toItems(payload.borrowers).map((row) => ({
+  _toBorrowerRows(payload) {
+    return toItems(payload).map((row) => ({
+      id: firstDefined(row.id, row.borrower_id, row.external_reference, row.borrower_name, row.name),
       borrowerName: firstDefined(row.borrower_name, row.borrower, row.name),
-      legalEntity: firstDefined(row.legal_entity, row.legalEntity, row.entity_name),
       exposure: formatCurrency(firstDefined(row.exposure, row.exposure_usd, row.notional)),
-      navPct: formatPercent(firstDefined(row.nav_pct, row.percent_nav, row.pct_nav, row.nav_percentage)),
       riskBand: firstDefined(row.risk_band, row.risk_rating),
       covenantStatus: firstDefined(row.covenant_status, row.covenantStatus),
-      country: firstDefined(row.country, row.country_code),
-      sector: firstDefined(row.sector, row.industry),
       lastReviewDate: formatDate(firstDefined(row.last_review_date, row.reviewed_at, row.last_reviewed_at)),
-      owner: firstDefined(row.owner, row.owner_name, row.relationship_manager),
-    }));
-
-    const loanRows = toItems(payload.loans).map((row) => ({
-      facilityName: firstDefined(row.facility_name, row.facility, row.loan_name),
-      borrower: firstDefined(row.borrower_name, row.borrower, row.counterparty),
-      principalOutstanding: formatCurrency(firstDefined(row.principal_outstanding, row.principal, row.principal_amount, row.notional)),
-      interestRate: firstDefined(row.interest_rate, row.rate),
-      rateType: firstDefined(row.rate_type, row.interest_rate_type),
-      maturityDate: formatDate(firstDefined(row.maturity_date, row.maturity)),
-      daysToMaturity: firstDefined(row.days_to_maturity, row.daysToMaturity),
-      covenantStatus: firstDefined(row.covenant_status, row.status, row.state),
-      collateralType: firstDefined(row.collateral_type, row.collateral),
       internalRating: firstDefined(row.internal_rating, row.rating),
-      status: firstDefined(row.status, row.workflow_status, row.state),
+      investmentType: firstDefined(row.investment_type, row.asset_type, row.category),
     }));
-
-    const borrowerColumns = [
-      { key: "borrowerName", label: "Borrower Name", priority: "P1" },
-      { key: "legalEntity", label: "Legal Entity", priority: "P2" },
-      { key: "exposure", label: "Exposure", priority: "P1" },
-      { key: "navPct", label: "% NAV", priority: "P1" },
-      { key: "riskBand", label: "Risk Band", priority: "P2" },
-      { key: "covenantStatus", label: "Covenant Status", priority: "P1" },
-      { key: "country", label: "Country", priority: "P2" },
-      { key: "sector", label: "Sector", priority: "P2" },
-      { key: "lastReviewDate", label: "Last Review Date", priority: "P3" },
-      { key: "owner", label: "Owner", priority: "P2" },
-    ];
-
-    const loansColumns = [
-      { key: "facilityName", label: "Facility Name", priority: "P1" },
-      { key: "borrower", label: "Borrower", priority: "P1" },
-      { key: "principalOutstanding", label: "Principal Outstanding", priority: "P1" },
-      { key: "interestRate", label: "Interest Rate", priority: "P2" },
-      { key: "rateType", label: "Rate Type", priority: "P2" },
-      { key: "maturityDate", label: "Maturity Date", priority: "P2" },
-      { key: "daysToMaturity", label: "Days to Maturity", priority: "P1" },
-      { key: "covenantStatus", label: "Covenant Status", priority: "P1" },
-      { key: "collateralType", label: "Collateral Type", priority: "P3" },
-      { key: "internalRating", label: "Internal Rating", priority: "P2" },
-      { key: "status", label: "Status", priority: "P1" },
-    ];
-
-    this.borrowersHost.replaceChildren(buildDenseTable(borrowerColumns, borrowerRows));
-    this.loansHost.replaceChildren(buildDenseTable(loansColumns, loanRows));
   }
 
-  _renderMonitoring(payload) {
-    const alertsItems = toItems(payload.alerts).slice(0, 12).map((item) => ({
-      text: firstDefined(item.alert_type, item.name, item.borrower, "Alert"),
-      description: firstDefined(item.message, item.severity, item.status, "—"),
+  _toFacilityRows(payload) {
+    return toItems(payload).map((row) => ({
+      id: firstDefined(row.id, row.loan_id, row.external_reference, row.facility_name, row.loan_name),
+      facilityName: firstDefined(row.facility_name, row.facility, row.loan_name),
+      borrower: firstDefined(row.borrower_name, row.borrower, row.counterparty),
+      exposure: formatCurrency(firstDefined(row.principal_outstanding, row.principal, row.principal_amount, row.notional)),
+      riskBand: firstDefined(row.risk_band, row.risk_rating, row.internal_rating),
+      covenantStatus: firstDefined(row.covenant_status, row.status, row.state),
+      maturityDate: formatDate(firstDefined(row.maturity_date, row.maturity)),
+      internalRating: firstDefined(row.internal_rating, row.rating),
+      investmentType: firstDefined(row.investment_type, row.asset_type, row.category),
     }));
+  }
 
-    const alertsWrap = document.createElement("div");
-    const alertsTitle = document.createElement("ui5-title");
-    alertsTitle.level = "H6";
-    alertsTitle.textContent = "Backend Alerts";
-    alertsWrap.append(alertsTitle, buildList(alertsItems, "No backend alerts."));
+  _applyClientFilters(rows) {
+    return rows.filter((row) => {
+      const borrowerMatch = !this.state.filters.borrower.length || this.state.filters.borrower.includes(String(row.borrowerName || row.borrower || ""));
+      const riskMatch = !this.state.filters.riskBand.length || this.state.filters.riskBand.includes(String(row.riskBand || ""));
+      const typeMatch = !this.state.filters.investmentType || String(row.investmentType || "") === this.state.filters.investmentType;
+      return borrowerMatch && riskMatch && typeMatch;
+    });
+  }
 
-    this.monitoringContent.replaceChildren(alertsWrap);
+  _syncInvestmentTypeOptions() {
+    setOptions(this.investmentTypeSelect, this.state.investmentTypes, this.state.filters.investmentType);
+  }
+
+  _renderLeftList() {
+    const source = this.state.listView === "FACILITIES" ? this.data.facilities : this.data.borrowers;
+    const filtered = this._applyClientFilters(source);
+    this.listHost.replaceChildren(buildItemList(filtered, (row) => this._selectItem(row)));
+  }
+
+  _selectItem(row) {
+    this.selectedItem = row;
+
+    this.detailHeader.titleText = safe(row.borrowerName || row.borrower, "Borrower Detail");
+
+    this.detailMeta.replaceChildren();
+    const fragments = [
+      `Internal Rating: ${safe(row.internalRating)}`,
+      `Exposure: ${safe(row.exposure)}`,
+      `Risk Status: ${safe(row.riskBand)}`,
+      `Last Review Date: ${safe(row.lastReviewDate || row.maturityDate)}`,
+    ];
+    const badge = makeStatusBadge(row.covenantStatus);
+    const text = document.createElement("span");
+    text.textContent = fragments.join(" • ");
+    this.detailMeta.append(text, badge);
+
+    const facilitiesItems = this.data.facilities
+      .filter((facility) => String(facility.borrower || "") === String(row.borrowerName || row.borrower || ""))
+      .map((facility) => ({
+        text: safe(facility.facilityName),
+        description: `${safe(facility.exposure)} • Maturity ${safe(facility.maturityDate)}`,
+      }));
+
+    const covenantItems = this.data.alerts
+      .filter((alert) => String(firstDefined(alert.entity_type, "")).toLowerCase().includes("covenant") || String(firstDefined(alert.alert_type, "")).toLowerCase().includes("covenant"))
+      .map((alert) => ({
+        text: firstDefined(alert.alert_type, "Covenant Monitoring"),
+        description: firstDefined(alert.message, alert.status, alert.severity, "—"),
+      }));
+
+    const documentItems = [
+      { text: "Investment Memo", description: safe(row.borrowerName || row.borrower) },
+      { text: "Credit Review", description: safe(row.lastReviewDate || row.maturityDate) },
+    ];
+
+    this.tabOverview.firstElementChild.replaceChildren(
+      buildOverviewList([
+        { text: "Alerts", description: `${this.data.alerts.length} items` },
+        { text: "Exceptions", description: this.data.alerts.length ? "Open items available" : "No open items" },
+        { text: "Covenant Monitoring", description: safe(row.covenantStatus) },
+      ]),
+    );
+    this.tabFacilities.firstElementChild.replaceChildren(buildOverviewList(facilitiesItems));
+    this.tabCovenants.firstElementChild.replaceChildren(buildOverviewList(covenantItems));
+    this.tabDocuments.firstElementChild.replaceChildren(buildOverviewList(documentItems));
   }
 
   async onShow() {
@@ -527,22 +463,15 @@ export class PortfolioPage {
 
     try {
       const borrowerParams = {
-        limit: 50,
+        limit: 100,
         offset: 0,
-        vehicle: this.state.filters.vehicle,
-        risk_band: this.state.filters.riskBand.join(","),
-        borrower: this.state.filters.borrower.join(","),
-        as_of_range: this.state.filters.dateRange,
-        saved_view: this.state.savedView,
+        investment_type: this.state.filters.investmentType,
       };
 
       const loanParams = {
-        limit: 50,
+        limit: 100,
         offset: 0,
-        vehicle: this.state.filters.vehicle,
-        borrower: this.state.filters.borrower.join(","),
-        as_of_range: this.state.filters.dateRange,
-        saved_view: this.state.savedView,
+        investment_type: this.state.filters.investmentType,
       };
 
       const [borrowers, loans, alerts] = await Promise.all([
@@ -552,34 +481,62 @@ export class PortfolioPage {
       ]);
 
       this.state.asOf = getAsOf(borrowers, loans, alerts);
-      this._refreshCommandMeta();
+      this._refreshMeta();
+
+      const borrowerRows = this._toBorrowerRows(borrowers);
+      const facilityRows = this._toFacilityRows(loans).map((row) => ({
+        borrowerName: row.borrower,
+        exposure: row.exposure,
+        riskBand: row.riskBand,
+        covenantStatus: row.covenantStatus,
+        ...row,
+      }));
+
+      this.data.borrowers = borrowerRows;
+      this.data.facilities = facilityRows;
+      this.data.alerts = toItems(alerts);
+
+      const typeSet = new Set(this.state.investmentTypes);
+      [
+        "Direct Loans",
+        "Equity Participations",
+        "Investment Funds",
+      ].forEach((value) => typeSet.add(value));
+
+      borrowerRows.forEach((row) => {
+        if (row.investmentType) typeSet.add(String(row.investmentType));
+      });
+      facilityRows.forEach((row) => {
+        if (row.investmentType) typeSet.add(String(row.investmentType));
+      });
+      this.state.investmentTypes = Array.from(typeSet).sort((a, b) => a.localeCompare(b));
+      this._syncInvestmentTypeOptions();
 
       setOptions(
-        this.vehicleSelect,
-        [...new Set(toItems(borrowers).map((row) => firstDefined(row.vehicle, row.vehicle_name)).filter(Boolean))],
-        this.state.filters.vehicle,
+        this.listViewSelect,
+        ["Borrowers", "Facilities"],
+        this.state.listView === "FACILITIES" ? "Facilities" : "Borrowers",
       );
 
       setMultiComboItems(
         this.borrowerCombo,
-        [...new Set(toItems(borrowers).map((row) => firstDefined(row.borrower, row.name, row.borrower_name)).filter(Boolean))],
+        [...new Set(borrowerRows.map((row) => row.borrowerName).filter(Boolean))],
         new Set(this.state.filters.borrower),
       );
 
       setMultiComboItems(
         this.riskBandCombo,
-        [...new Set(toItems(borrowers).map((row) => firstDefined(row.risk_band, row.risk_rating)).filter(Boolean))],
+        [...new Set(borrowerRows.map((row) => row.riskBand).filter(Boolean))],
         new Set(this.state.filters.riskBand),
       );
 
-      const viewPayload = { borrowers, loans, alerts };
-
-      this._setLayerGovernance(this.commandGovernanceHost, borrowers);
-      this._setLayerGovernance(this.operationalGovernanceHost, viewPayload);
-      this._setLayerGovernance(this.monitoringGovernanceHost, alerts);
-
-      this._renderOperational(viewPayload);
-      this._renderMonitoring(viewPayload);
+      this._renderLeftList();
+      if (!this.selectedItem && borrowerRows.length) {
+        this._selectItem(borrowerRows[0]);
+      } else if (this.selectedItem) {
+        const candidate = [...borrowerRows, ...facilityRows].find((row) => String(row.id) === String(this.selectedItem.id));
+        this._selectItem(candidate || borrowerRows[0] || facilityRows[0] || { borrowerName: "Portfolio", exposure: "—", riskBand: "—", covenantStatus: "—" });
+      }
     } catch (error) {
       this._setError(error?.message ? String(error.message) : "Failed to load portfolio data");
     } finally {

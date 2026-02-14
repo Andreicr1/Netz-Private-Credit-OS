@@ -4,16 +4,13 @@ import { SideNavigation } from "./SideNavigation.js";
 import { AssistantDrawer } from "../components/AssistantDrawer.js";
 
 import { DashboardPage } from "../pages/Dashboard.js";
-import { DocumentsPage } from "../pages/DocumentsPage.js";
 import { DataroomPage } from "../pages/DataroomPage.js";
 import { CashManagementPage } from "../pages/CashManagementPage.js";
 import { CompliancePage } from "../pages/CompliancePage.js";
-import { ActionsPage } from "../pages/ActionsPage.js";
 import { ReportingPage } from "../pages/ReportingPage.js";
 import { PortfolioPage } from "../pages/PortfolioPage.js";
 import { DealsPipelinePage } from "../pages/DealsPipelinePage.js";
 import { SignaturesPage } from "../pages/SignaturesPage.js";
-import { AdminAuditPage } from "../pages/AdminAuditPage.js";
 import { SignatureDetailView } from "../workflows/SignatureDetailView.js";
 
 function normalizePath(pathname) {
@@ -123,15 +120,11 @@ export class AppShell {
       "/dashboard",
       "/portfolio",
       "/deals",
-      "/documents",
       "/dataroom",
       "/cash",
       "/compliance",
-      "/actions",
       "/reporting",
       "/signatures",
-      "/admin",
-      "/audit-log",
     ];
 
     if (moduleRoutes.includes(pathname)) {
@@ -154,9 +147,6 @@ export class AppShell {
       case "/deals":
         this._renderPage(new DealsPipelinePage({ fundId: this._fundId }));
         break;
-      case "/documents":
-        this._renderPage(new DocumentsPage({ fundId: this._fundId }));
-        break;
       case "/dataroom":
       case "/data-room":
         this._renderPage(new DataroomPage({ fundId: this._fundId }));
@@ -167,20 +157,11 @@ export class AppShell {
       case "/compliance":
         this._renderPage(new CompliancePage({ fundId: this._fundId }));
         break;
-      case "/actions":
-        this._renderPage(new ActionsPage({ fundId: this._fundId }));
-        break;
       case "/reporting":
         this._renderPage(new ReportingPage({ fundId: this._fundId }));
         break;
       case "/signatures":
         this._renderPage(new SignaturesPage({ fundId: this._fundId }));
-        break;
-      case "/admin":
-        this._renderPage(new AdminAuditPage({ fundId: this._fundId, mode: "admin" }));
-        break;
-      case "/audit-log":
-        this._renderPage(new AdminAuditPage({ fundId: this._fundId, mode: "audit" }));
         break;
       default:
         this.navigate("/dashboard");

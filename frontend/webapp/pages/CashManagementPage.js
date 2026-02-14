@@ -139,12 +139,12 @@ function buildDenseTable(columns, rows) {
   headerRow.setAttribute("slot", "headerRow");
   visibleColumns.forEach((column) => {
     const headerCell = document.createElement("ui5-table-header-cell");
-    headerCell.textContent = `${column.label} ${column.priority}`;
+    headerCell.textContent = column.label;
     headerRow.appendChild(headerCell);
   });
   if (hiddenColumns.length) {
     const detailsHeader = document.createElement("ui5-table-header-cell");
-    detailsHeader.textContent = "Details P1";
+    detailsHeader.textContent = "Details";
     headerRow.appendChild(detailsHeader);
   }
   table.appendChild(headerRow);
@@ -210,10 +210,11 @@ export class CashManagementPage {
         currency: "",
         dateRange: "",
       },
-      savedView: "DEFAULT",
+      savedView: "TREASURY",
       activeFiltersCount: 0,
       asOf: "—",
     };
+    this.lastTransactionsRows = [];
 
     this.el = document.createElement("ui5-dynamic-page");
 
@@ -269,7 +270,7 @@ export class CashManagementPage {
     left.setAttribute("slot", "startContent");
     const title = document.createElement("ui5-title");
     title.level = "H5";
-    title.textContent = "Cash Command";
+    title.textContent = "Treasury Filters";
     left.appendChild(title);
 
     const right = document.createElement("div");
@@ -300,19 +301,24 @@ export class CashManagementPage {
 
     this.savedViewSelect = document.createElement("ui5-select");
     this.savedViewSelect.accessibleName = "Saved View";
-    setOptions(this.savedViewSelect, ["DEFAULT", "TREASURY", "RECONCILIATION"], this.state.savedView);
+    setOptions(this.savedViewSelect, ["TREASURY", "RECONCILIATION"], this.state.savedView);
 
     const applyBtn = document.createElement("ui5-button");
     applyBtn.design = "Emphasized";
     applyBtn.textContent = "Apply";
     applyBtn.addEventListener("click", () => this._applyFilters());
 
-    const clearBtn = document.createElement("ui5-button");
-    clearBtn.design = "Transparent";
-    clearBtn.textContent = "Clear";
-    clearBtn.addEventListener("click", () => this._clearFilters());
+    const resetBtn = document.createElement("ui5-button");
+    resetBtn.design = "Default";
+    resetBtn.textContent = "Reset";
+    resetBtn.addEventListener("click", () => this._clearFilters());
 
-    controls.append(this.accountSelect, this.currencySelect, this.dateRange, this.savedViewSelect, applyBtn, clearBtn);
+    const exportBtn = document.createElement("ui5-button");
+    exportBtn.design = "Transparent";
+    exportBtn.textContent = "Export";
+    exportBtn.addEventListener("click", () => this._exportTransactions());
+
+    controls.append(this.accountSelect, this.currencySelect, this.dateRange, this.savedViewSelect, applyBtn, resetBtn, exportBtn);
     body.append(bar, controls);
     card.appendChild(body);
     return card;
@@ -324,7 +330,7 @@ export class CashManagementPage {
 
     const header = document.createElement("ui5-card-header");
     header.titleText = "Layer 2 — Analytical";
-    header.subtitleText = "Treasury KPI Strip";
+    header.subtitleText = "Liquidity Overview";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -348,7 +354,7 @@ export class CashManagementPage {
 
     const header = document.createElement("ui5-card-header");
     header.titleText = "Layer 3 — Operational";
-    header.subtitleText = "Transactions Table (dense)";
+    header.subtitleText = "Cash Transactions";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -379,7 +385,7 @@ export class CashManagementPage {
 
     const header = document.createElement("ui5-card-header");
     header.titleText = "Layer 4 — Monitoring";
-    header.subtitleText = "Exceptions (Aging Buckets backend-driven)";
+    header.subtitleText = "Exceptions & Alerts";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -390,7 +396,7 @@ export class CashManagementPage {
     body.appendChild(this.monitoringGovernanceHost);
 
     this.monitoringPanel = document.createElement("ui5-panel");
-    this.monitoringPanel.headerText = "Aging Buckets";
+    this.monitoringPanel.headerText = "Exceptions & Alerts";
     this.monitoringHost = document.createElement("div");
     this.monitoringPanel.appendChild(this.monitoringHost);
 
@@ -416,12 +422,12 @@ export class CashManagementPage {
       this.state.filters.dateRange,
     ].filter(Boolean).length;
 
-    this.activeFiltersTag.textContent = `activeFiltersCount ${this.state.activeFiltersCount}`;
-    this.asOfTag.textContent = `asOf ${this.state.asOf}`;
+    this.activeFiltersTag.textContent = `Filters ${this.state.activeFiltersCount}`;
+    this.asOfTag.textContent = `As of: ${this.state.asOf}`;
   }
 
   _applyFilters() {
-    this.state.savedView = String(this.savedViewSelect.selectedOption?.value || "DEFAULT");
+    this.state.savedView = String(this.savedViewSelect.selectedOption?.value || "TREASURY");
     this.state.filters = {
       account: this.accountSelect.selectedOption?.value || "",
       currency: this.currencySelect.selectedOption?.value || "",
@@ -432,7 +438,7 @@ export class CashManagementPage {
 
   _clearFilters() {
     this.state.filters = { account: "", currency: "", dateRange: "" };
-    this.state.savedView = "DEFAULT";
+    this.state.savedView = "TREASURY";
     this.dateRange.value = "";
     this.onShow();
   }
@@ -441,6 +447,18 @@ export class CashManagementPage {
     host.replaceChildren();
     const strip = buildGovernanceStrip(payload);
     if (strip) host.appendChild(strip);
+  }
+
+  _exportTransactions() {
+    const rows = Array.isArray(this.lastTransactionsRows) ? this.lastTransactionsRows : [];
+    const content = JSON.stringify(rows, null, 2);
+    const blob = new Blob([content], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "cash-transactions-export.json";
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   _renderAnalytical(data) {
@@ -500,6 +518,8 @@ export class CashManagementPage {
       agingBucket: firstDefined(row.aging_bucket, row.aging, row.bucket),
       enteredBy: firstDefined(row.entered_by, row.created_by, row.owner),
     }));
+
+    this.lastTransactionsRows = transactionsRows;
 
     this.transactionsHost.replaceChildren(buildDenseTable(transactionsColumns, transactionsRows));
   }
