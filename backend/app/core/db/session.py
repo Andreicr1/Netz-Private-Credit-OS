@@ -8,7 +8,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
-from app.core.db.base import Base
 
 
 def _import_model_modules() -> None:
@@ -47,7 +46,6 @@ def get_engine():
     # Lazy init: evita derrubar o app no import caso env/KeyVault ainda esteja resolvendo.
     engine = create_engine(settings.database_url, pool_pre_ping=True)
     _import_model_modules()
-    Base.metadata.create_all(bind=engine)
     return engine
 
 
