@@ -4,7 +4,7 @@ export default defineConfig({
   // Keep the existing OpenUI5 app in frontend/webapp/ untouched, but build/run the new
   // UI5 Web Components app from the frontend root.
   publicDir: "webapp/public",
-  base: "./",
+  base: "/",
   resolve: {
     alias: {
       // User-mandated import path; UI5 theming ships as a JS module.
