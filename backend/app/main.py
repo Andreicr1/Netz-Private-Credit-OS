@@ -8,6 +8,7 @@ from app.core.logging import configure_logging
 from app.core.middleware.request_id import RequestIdMiddleware
 from app.core.middleware.audit import set_actor
 from app.core.config import settings
+from app.infra.telemetry import setup_telemetry
 from app.services.azure.blob_client import health_check_storage
 from app.services.azure.keyvault_client import health_check_keyvault
 from app.services.azure.search_client import health_check_search
@@ -79,6 +80,7 @@ def create_app() -> FastAPI:
     configure_logging()
 
     app = FastAPI(title="Netz Private Credit OS - Backend", version="0.1.0")
+    setup_telemetry(app)
     app.add_middleware(RequestIdMiddleware)
 
     @app.get("/health", tags=["admin"])

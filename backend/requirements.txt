@@ -29,5 +29,10 @@ python-docx>=1.1
 # Fund Copilot (EPIC 3C.1): OpenAI Responses API client
 openai>=1.40
 
+azure-monitor-opentelemetry==1.6.0
+opentelemetry-instrumentation-fastapi==0.46b0
+opentelemetry-instrumentation-requests==0.46b0
+opentelemetry-instrumentation-sqlalchemy==0.46b0
+
 # Nota: dependências de teste não devem ir para produção no App Service.
 # (mantê-las aqui aumenta tempo de build do Oryx e superfície de risco)
