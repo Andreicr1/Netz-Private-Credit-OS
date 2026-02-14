@@ -13,6 +13,7 @@ import { ReportingPage } from "../pages/ReportingPage.js";
 import { PortfolioPage } from "../pages/PortfolioPage.js";
 import { DealsPipelinePage } from "../pages/DealsPipelinePage.js";
 import { SignaturesPage } from "../pages/SignaturesPage.js";
+import { AdminAuditPage } from "../pages/AdminAuditPage.js";
 import { SignatureDetailView } from "../workflows/SignatureDetailView.js";
 
 function normalizePath(pathname) {
@@ -176,10 +177,10 @@ export class AppShell {
         this._renderPage(new SignaturesPage({ fundId: this._fundId }));
         break;
       case "/admin":
-        this._renderPlaceholderPage("Admin", "Admin panel — role-gated placeholder. No actions available.");
+        this._renderPage(new AdminAuditPage({ fundId: this._fundId, mode: "admin" }));
         break;
       case "/audit-log":
-        this._renderPlaceholderPage("Audit Log", "Audit log viewer — stub. Will surface backend audit trail.");
+        this._renderPage(new AdminAuditPage({ fundId: this._fundId, mode: "audit" }));
         break;
       default:
         this.navigate("/dashboard");

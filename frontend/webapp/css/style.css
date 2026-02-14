@@ -419,6 +419,99 @@ body {
   overflow-y: auto;
 }
 
+.netz-wave-page {
+  gap: 1rem;
+}
+
+.netz-wave-layer-card {
+  border: 1px solid var(--sapList_BorderColor);
+  box-shadow: var(--sapContent_Shadow0);
+}
+
+.netz-wave-layer-body {
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.netz-wave-command-bar {
+  width: 100%;
+}
+
+.netz-wave-command-meta {
+  display: inline-flex;
+  gap: 0.5rem;
+}
+
+.netz-wave-command-controls {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(7, minmax(10rem, 1fr));
+}
+
+@media (max-width: 1280px) {
+  .netz-wave-command-controls {
+    grid-template-columns: repeat(3, minmax(10rem, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .netz-wave-command-controls {
+    grid-template-columns: 1fr;
+  }
+}
+
+.netz-wave-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(11rem, 1fr));
+  gap: 0.75rem;
+}
+
+@media (max-width: 1024px) {
+  .netz-wave-kpi-strip {
+    grid-template-columns: repeat(2, minmax(11rem, 1fr));
+  }
+}
+
+.netz-wave-kpi-card {
+  border: 1px solid var(--sapList_BorderColor);
+}
+
+.netz-wave-kpi-body {
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.netz-wave-table-host {
+  display: grid;
+  width: 100%;
+}
+
+.netz-wave-table-dense {
+  width: 100%;
+  --_netzCellPadV: 0.375rem;
+}
+
+.netz-wave-table-dense ui5-table-header-cell,
+.netz-wave-table-dense ui5-table-cell {
+  padding-top: var(--_netzCellPadV);
+  padding-bottom: var(--_netzCellPadV);
+  font-size: var(--sapFontSmallSize);
+}
+
+.netz-wave-monitor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 960px) {
+  .netz-wave-monitor-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ── Empty State (institutional) ── */
 .netz-board-empty-state {
   padding: 1.75rem 1.5rem;

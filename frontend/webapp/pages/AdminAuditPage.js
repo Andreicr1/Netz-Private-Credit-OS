@@ -1,16 +1,10 @@
-import * as dealsApi from "../api/deals.js";
+import * as adminAuditApi from "../api/adminAudit.js";
 
 const LATENCY_THRESHOLD = 300;
 
 function safe(value, fallback = "—") {
   if (value === null || value === undefined || value === "") return fallback;
   return String(value);
-}
-
-function toItems(payload) {
-  if (Array.isArray(payload?.items)) return payload.items;
-  if (Array.isArray(payload)) return payload;
-  return [];
 }
 
 function firstDefined(...values) {
@@ -20,24 +14,35 @@ function firstDefined(...values) {
   return null;
 }
 
-function formatCurrency(value) {
-  if (value === null || value === undefined || value === "") return "—";
-  const number = Number(value);
-  if (Number.isNaN(number)) return safe(value);
-  return number.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+function toItems(payload) {
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload)) return payload;
+  return [];
 }
 
+function formatDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return safe(value);
+  return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return safe(value);
+  return date.toLocaleString("en-US", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
 
 function getAsOf(...payloads) {
   for (const payload of payloads) {
     const asOf = firstDefined(payload?.asOf, payload?.as_of, payload?.timestamp, payload?.generated_at);
-    if (asOf) {
-      const date = new Date(asOf);
-      if (!Number.isNaN(date.getTime())) {
-        return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-      }
-      return safe(asOf);
+    if (!asOf) continue;
+    const date = new Date(asOf);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
     }
+    return safe(asOf);
   }
   return "—";
 }
@@ -124,6 +129,7 @@ function buildDenseTable(columns, rows) {
       const button = document.createElement("ui5-button");
       button.design = "Transparent";
       button.textContent = "View";
+
       const popover = document.createElement("ui5-responsive-popover");
       popover.headerText = "Collapsed Columns";
       const list = document.createElement("ui5-list");
@@ -135,6 +141,7 @@ function buildDenseTable(columns, rows) {
       });
       popover.appendChild(list);
       button.addEventListener("click", () => popover.showAt(button));
+
       detailsCell.append(button, popover);
       tr.appendChild(detailsCell);
     }
@@ -145,11 +152,11 @@ function buildDenseTable(columns, rows) {
   return table;
 }
 
-function buildQueueList(items) {
+function buildList(items, emptyText) {
   const list = document.createElement("ui5-list");
   if (!items.length) {
     const li = document.createElement("ui5-li");
-    li.textContent = "No pending approvals.";
+    li.textContent = emptyText;
     list.appendChild(li);
     return list;
   }
@@ -163,14 +170,14 @@ function buildQueueList(items) {
   return list;
 }
 
-export class DealsPipelinePage {
-  constructor({ fundId }) {
+export class AdminAuditPage {
+  constructor({ fundId, mode = "admin" }) {
     this.fundId = fundId;
+    this.mode = mode;
     this.state = {
       filters: {
-        stage: "",
-        desk: "",
-        riskBand: "",
+        user: "",
+        actionType: "",
         dateRange: "",
       },
       savedView: "DEFAULT",
@@ -183,7 +190,7 @@ export class DealsPipelinePage {
     const pageTitle = document.createElement("ui5-dynamic-page-title");
     const heading = document.createElement("ui5-title");
     heading.level = "H1";
-    heading.textContent = "Deals Pipeline";
+    heading.textContent = mode === "audit" ? "Audit Log" : "Admin";
     pageTitle.appendChild(heading);
     this.el.appendChild(pageTitle);
 
@@ -200,11 +207,10 @@ export class DealsPipelinePage {
     content.appendChild(this.errorStrip);
 
     this.commandLayer = this._buildCommandLayer();
-    this.analyticalLayer = this._buildAnalyticalLayer();
     this.operationalLayer = this._buildOperationalLayer();
     this.monitoringLayer = this._buildMonitoringLayer();
 
-    content.append(this.commandLayer, this.analyticalLayer, this.operationalLayer, this.monitoringLayer);
+    content.append(this.commandLayer, this.operationalLayer, this.monitoringLayer);
     this.busy.appendChild(content);
     this.el.appendChild(this.busy);
   }
@@ -215,7 +221,7 @@ export class DealsPipelinePage {
 
     const header = document.createElement("ui5-card-header");
     header.titleText = "Layer 1 — Command";
-    header.subtitleText = "FilterBar";
+    header.subtitleText = "User, action type and date range filters";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -232,7 +238,7 @@ export class DealsPipelinePage {
     left.setAttribute("slot", "startContent");
     const title = document.createElement("ui5-title");
     title.level = "H5";
-    title.textContent = "Deals Command FilterBar";
+    title.textContent = modeLabel(this.mode);
     left.appendChild(title);
 
     const right = document.createElement("div");
@@ -252,21 +258,18 @@ export class DealsPipelinePage {
     const controls = document.createElement("div");
     controls.className = "netz-wave-command-controls";
 
-    this.stageSelect = document.createElement("ui5-select");
-    this.stageSelect.accessibleName = "Stage";
+    this.userSelect = document.createElement("ui5-select");
+    this.userSelect.accessibleName = "User";
 
-    this.deskSelect = document.createElement("ui5-select");
-    this.deskSelect.accessibleName = "Desk";
-
-    this.riskBandSelect = document.createElement("ui5-select");
-    this.riskBandSelect.accessibleName = "Risk Band";
+    this.actionTypeSelect = document.createElement("ui5-select");
+    this.actionTypeSelect.accessibleName = "Action Type";
 
     this.dateRange = document.createElement("ui5-date-range-picker");
     this.dateRange.accessibleName = "Date Range";
 
     this.savedViewSelect = document.createElement("ui5-select");
     this.savedViewSelect.accessibleName = "Saved View";
-    setOptions(this.savedViewSelect, ["DEFAULT", "IC_QUEUE", "ORIGINATION"], this.state.savedView);
+    setOptions(this.savedViewSelect, ["DEFAULT", "GOVERNANCE", "OPERATIONS"], this.state.savedView);
 
     const applyBtn = document.createElement("ui5-button");
     applyBtn.design = "Emphasized";
@@ -278,32 +281,9 @@ export class DealsPipelinePage {
     clearBtn.textContent = "Clear";
     clearBtn.addEventListener("click", () => this._clearFilters());
 
-    controls.append(this.stageSelect, this.deskSelect, this.riskBandSelect, this.dateRange, this.savedViewSelect, applyBtn, clearBtn);
+    controls.append(this.userSelect, this.actionTypeSelect, this.dateRange, this.savedViewSelect, applyBtn, clearBtn);
+
     body.append(bar, controls);
-    card.appendChild(body);
-    return card;
-  }
-
-  _buildAnalyticalLayer() {
-    const card = document.createElement("ui5-card");
-    card.className = "netz-wave-layer-card";
-
-    const header = document.createElement("ui5-card-header");
-    header.titleText = "Layer 2 — Analytical";
-    header.subtitleText = "Pipeline By Stage (dense)";
-    header.setAttribute("slot", "header");
-    card.appendChild(header);
-
-    const body = document.createElement("div");
-    body.className = "netz-wave-layer-body";
-
-    this.analyticalGovernanceHost = document.createElement("div");
-    body.appendChild(this.analyticalGovernanceHost);
-
-    this.pipelineByStageHost = document.createElement("div");
-    this.pipelineByStageHost.className = "netz-wave-table-host";
-    body.appendChild(this.pipelineByStageHost);
-
     card.appendChild(body);
     return card;
   }
@@ -314,7 +294,7 @@ export class DealsPipelinePage {
 
     const header = document.createElement("ui5-card-header");
     header.titleText = "Layer 3 — Operational";
-    header.subtitleText = "Execution Queue (dense)";
+    header.subtitleText = "Audit Log Table (dense)";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -324,9 +304,9 @@ export class DealsPipelinePage {
     this.operationalGovernanceHost = document.createElement("div");
     body.appendChild(this.operationalGovernanceHost);
 
-    this.executionQueueHost = document.createElement("div");
-    this.executionQueueHost.className = "netz-wave-table-host";
-    body.appendChild(this.executionQueueHost);
+    this.tableHost = document.createElement("div");
+    this.tableHost.className = "netz-wave-table-host";
+    body.appendChild(this.tableHost);
 
     card.appendChild(body);
     return card;
@@ -338,7 +318,7 @@ export class DealsPipelinePage {
 
     const header = document.createElement("ui5-card-header");
     header.titleText = "Layer 4 — Monitoring";
-    header.subtitleText = "Pending Approvals (backend-driven only)";
+    header.subtitleText = "Governance Health Panel";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -349,9 +329,9 @@ export class DealsPipelinePage {
     body.appendChild(this.monitoringGovernanceHost);
 
     const panel = document.createElement("ui5-panel");
-    panel.headerText = "Pending Approvals";
-    this.pendingApprovalsHost = document.createElement("div");
-    panel.appendChild(this.pendingApprovalsHost);
+    panel.headerText = "Governance Health";
+    this.healthHost = document.createElement("div");
+    panel.appendChild(this.healthHost);
 
     body.appendChild(panel);
     card.appendChild(body);
@@ -369,13 +349,7 @@ export class DealsPipelinePage {
   }
 
   _refreshCommandMeta() {
-    this.state.activeFiltersCount = [
-      this.state.filters.stage,
-      this.state.filters.desk,
-      this.state.filters.riskBand,
-      this.state.filters.dateRange,
-    ].filter(Boolean).length;
-
+    this.state.activeFiltersCount = [this.state.filters.user, this.state.filters.actionType, this.state.filters.dateRange].filter(Boolean).length;
     this.activeFiltersTag.textContent = `activeFiltersCount ${this.state.activeFiltersCount}`;
     this.asOfTag.textContent = `asOf ${this.state.asOf}`;
   }
@@ -383,16 +357,15 @@ export class DealsPipelinePage {
   _applyFilters() {
     this.state.savedView = String(this.savedViewSelect.selectedOption?.value || "DEFAULT");
     this.state.filters = {
-      stage: this.stageSelect.selectedOption?.value || "",
-      desk: this.deskSelect.selectedOption?.value || "",
-      riskBand: this.riskBandSelect.selectedOption?.value || "",
+      user: this.userSelect.selectedOption?.value || "",
+      actionType: this.actionTypeSelect.selectedOption?.value || "",
       dateRange: this.dateRange.value || "",
     };
     this.onShow();
   }
 
   _clearFilters() {
-    this.state.filters = { stage: "", desk: "", riskBand: "", dateRange: "" };
+    this.state.filters = { user: "", actionType: "", dateRange: "" };
     this.state.savedView = "DEFAULT";
     this.dateRange.value = "";
     this.onShow();
@@ -404,79 +377,48 @@ export class DealsPipelinePage {
     if (strip) host.appendChild(strip);
   }
 
-  _renderAnalytical(pipelinePayload) {
-    const stageRowsSource = Array.isArray(pipelinePayload?.stage_rows)
-      ? pipelinePayload.stage_rows
-      : Array.isArray(pipelinePayload?.stages)
-        ? pipelinePayload.stages
-        : toItems(pipelinePayload);
-
-    const rows = stageRowsSource.map((row) => ({
-      stage: firstDefined(row.stage, row.pipeline_stage),
-      count: firstDefined(row.count, row.deals_count),
-      notional: formatCurrency(firstDefined(row.notional, row.total_notional, row.amount)),
-      delta: firstDefined(row.delta, row.delta_notional, row.change),
-    }));
-
+  _renderOperational(rows) {
     const columns = [
-      { key: "stage", label: "Stage", priority: "P1" },
-      { key: "count", label: "Count", priority: "P1" },
-      { key: "notional", label: "Notional", priority: "P1" },
-      { key: "delta", label: "Delta", priority: "P2" },
+      { key: "timestampUtc", label: "Timestamp (UTC)", priority: "P1" },
+      { key: "actor", label: "Actor", priority: "P1" },
+      { key: "role", label: "Role", priority: "P2" },
+      { key: "action", label: "Action", priority: "P1" },
+      { key: "entityType", label: "Entity Type", priority: "P2" },
+      { key: "entityId", label: "Entity ID", priority: "P1" },
+      { key: "beforeStateHash", label: "Before State Hash", priority: "P3" },
+      { key: "afterStateHash", label: "After State Hash", priority: "P3" },
+      { key: "status", label: "Status", priority: "P1" },
+      { key: "ipAddress", label: "IP Address", priority: "P2" },
     ];
 
-    this.pipelineByStageHost.replaceChildren(buildDenseTable(columns, rows));
-  }
-
-  _renderOperational(pipelinePayload) {
-    const queueSource = Array.isArray(pipelinePayload?.execution_queue)
-      ? pipelinePayload.execution_queue
-      : Array.isArray(pipelinePayload?.queue)
-        ? pipelinePayload.queue
-        : toItems(pipelinePayload);
-
-    const rows = queueSource.map((row) => ({
-      dealName: firstDefined(row.deal_name, row.deal, row.name, row.id),
-      sponsor: firstDefined(row.sponsor, row.sponsor_name),
-      strategy: firstDefined(row.strategy, row.deal_strategy),
-      stage: firstDefined(row.stage, row.pipeline_stage),
-      notional: formatCurrency(firstDefined(row.notional, row.total_notional, row.amount)),
-      expectedIrr: firstDefined(row.expected_irr, row.irr, row.target_irr),
-      owner: firstDefined(row.owner, row.desk_owner, row.ic_owner),
-      slaDueDate: firstDefined(row.sla_due_date, row.sla_due, row.slaDue),
-      priority: firstDefined(row.priority, row.priority_level, row.rank),
-      approvalStatus: firstDefined(row.approval_status, row.ic_status, row.status),
+    const tableRows = rows.map((row) => ({
+      timestampUtc: firstDefined(row.timestamp_utc, row.timestamp, row.created_at, row.updated_at),
+      actor: firstDefined(row.actor, row.owner, row.owner_name, row.assignee, row.created_by),
+      role: firstDefined(row.role, row.actor_role, row.user_role),
+      action: firstDefined(row.action, row.title, row.name, row.workflow_action),
+      entityType: firstDefined(row.entity_type, row.domain, row.category, "action"),
+      entityId: firstDefined(row.entity_id, row.id, row.reference_id, row.trace_id),
+      beforeStateHash: firstDefined(row.before_state_hash, row.before_hash),
+      afterStateHash: firstDefined(row.after_state_hash, row.after_hash),
+      status: firstDefined(row.status, row.workflow_status),
+      ipAddress: firstDefined(row.ip_address, row.client_ip, row.source_ip),
     }));
 
-    const columns = [
-      { key: "dealName", label: "Deal Name", priority: "P1" },
-      { key: "sponsor", label: "Sponsor", priority: "P1" },
-      { key: "strategy", label: "Strategy", priority: "P2" },
-      { key: "stage", label: "Stage", priority: "P1" },
-      { key: "notional", label: "Notional", priority: "P1" },
-      { key: "expectedIrr", label: "Expected IRR", priority: "P2" },
-      { key: "owner", label: "Owner", priority: "P2" },
-      { key: "slaDueDate", label: "SLA Due Date", priority: "P1" },
-      { key: "priority", label: "Priority", priority: "P2" },
-      { key: "approvalStatus", label: "Approval Status", priority: "P1" },
-    ];
-
-    this.executionQueueHost.replaceChildren(buildDenseTable(columns, rows));
+    this.tableHost.replaceChildren(buildDenseTable(columns, tableRows));
   }
 
-  _renderMonitoring(pipelinePayload) {
-    const queue = Array.isArray(pipelinePayload?.pending_approvals)
-      ? pipelinePayload.pending_approvals
-      : Array.isArray(pipelinePayload?.approvals_queue)
-        ? pipelinePayload.approvals_queue
-        : [];
+  _renderMonitoring(healthPayload, azurePayload) {
+    const healthItems = [];
 
-    const queueItems = queue.slice(0, 10).map((item) => ({
-      text: firstDefined(item.deal_name, item.name, item.stage, "Pending approval"),
-      description: firstDefined(item.approval_status, item.ic_status, item.owner, item.message, item.status, "—"),
-    }));
+    Object.entries(healthPayload || {}).forEach(([key, value]) => {
+      healthItems.push({ text: key, description: safe(value) });
+    });
 
-    this.pendingApprovalsHost.replaceChildren(buildQueueList(queueItems));
+    Object.entries(azurePayload || {}).forEach(([key, value]) => {
+      healthItems.push({ text: `azure.${key}`, description: safe(value) });
+    });
+
+    this.healthHost.replaceChildren(buildList(healthItems, "No governance health data."));
   }
 
   async onShow() {
@@ -490,38 +432,65 @@ export class DealsPipelinePage {
     }
 
     try {
-      const params = {
-        limit: 100,
-        offset: 0,
-        stage: this.state.filters.stage,
-        desk: this.state.filters.desk,
-        risk_band: this.state.filters.riskBand,
-        date_range: this.state.filters.dateRange,
-        saved_view: this.state.savedView,
-      };
+      const [executionEvents, governedEvents, platformHealth, azureHealth] = await Promise.all([
+        adminAuditApi.listAdminAuditEvents(this.fundId, {
+          limit: 100,
+          offset: 0,
+          owner: this.state.filters.user,
+          action_type: this.state.filters.actionType,
+          date_range: this.state.filters.dateRange,
+          saved_view: this.state.savedView,
+        }),
+        adminAuditApi.listGovernedAuditEvents(this.fundId),
+        adminAuditApi.getPlatformHealth(),
+        adminAuditApi.getAzureHealth(),
+      ]);
 
-      const pipelineDeals = await dealsApi.listPipelineDeals(this.fundId, params);
+      const rows = [...toItems(executionEvents), ...toItems(governedEvents)].filter((row) => {
+        const user = this.state.filters.user;
+        const actionType = this.state.filters.actionType;
 
-      this.state.asOf = getAsOf(pipelineDeals);
+        const userMatch = !user || String(firstDefined(row.owner, row.owner_name, row.assignee, row.created_by, "")) === user;
+        const actionMatch = !actionType || String(firstDefined(row.action, row.status, row.workflow_action, "")).toLowerCase().includes(actionType.toLowerCase());
+
+        if (!this.state.filters.dateRange) {
+          return userMatch && actionMatch;
+        }
+
+        const ts = firstDefined(row.created_at, row.updated_at, row.timestamp);
+        const dateText = ts ? formatDate(ts) : "";
+        return userMatch && actionMatch && (!dateText || String(this.state.filters.dateRange).includes(dateText));
+      });
+
+      this.state.asOf = getAsOf(executionEvents, governedEvents);
       this._refreshCommandMeta();
 
-      const source = toItems(pipelineDeals);
-      setOptions(this.stageSelect, [...new Set(source.map((row) => firstDefined(row.stage, row.pipeline_stage)).filter(Boolean))], this.state.filters.stage);
-      setOptions(this.deskSelect, [...new Set(source.map((row) => firstDefined(row.desk, row.owner)).filter(Boolean))], this.state.filters.desk);
-      setOptions(this.riskBandSelect, [...new Set(source.map((row) => firstDefined(row.risk_band, row.riskBand)).filter(Boolean))], this.state.filters.riskBand);
+      setOptions(
+        this.userSelect,
+        [...new Set(rows.map((row) => firstDefined(row.owner, row.owner_name, row.assignee, row.created_by)).filter(Boolean))],
+        this.state.filters.user,
+      );
 
-      this._setLayerGovernance(this.commandGovernanceHost, pipelineDeals);
-      this._setLayerGovernance(this.analyticalGovernanceHost, pipelineDeals);
-      this._setLayerGovernance(this.operationalGovernanceHost, pipelineDeals);
-      this._setLayerGovernance(this.monitoringGovernanceHost, pipelineDeals);
+      setOptions(
+        this.actionTypeSelect,
+        [...new Set(rows.map((row) => firstDefined(row.action, row.workflow_action, row.status)).filter(Boolean))],
+        this.state.filters.actionType,
+      );
 
-      this._renderAnalytical(pipelineDeals);
-      this._renderOperational(pipelineDeals);
-      this._renderMonitoring(pipelineDeals);
+      this._setLayerGovernance(this.commandGovernanceHost, executionEvents);
+      this._setLayerGovernance(this.operationalGovernanceHost, governedEvents);
+      this._setLayerGovernance(this.monitoringGovernanceHost, azureHealth);
+
+      this._renderOperational(rows);
+      this._renderMonitoring(platformHealth, azureHealth);
     } catch (error) {
-      this._setError(error?.message ? String(error.message) : "Failed to load deals pipeline data");
+      this._setError(error?.message ? String(error.message) : "Failed to load admin/audit data");
     } finally {
       this.busy.active = false;
     }
   }
+}
+
+function modeLabel(mode) {
+  return mode === "audit" ? "Audit Command" : "Admin Command";
 }

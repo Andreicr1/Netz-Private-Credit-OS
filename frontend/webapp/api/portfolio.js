@@ -6,12 +6,11 @@ function encodeFundPath(fundId, suffix) {
 
 function withPageParams(path, params = {}) {
   const query = new URLSearchParams();
-  if (params.limit !== undefined && params.limit !== null) {
-    query.set("limit", String(params.limit));
-  }
-  if (params.offset !== undefined && params.offset !== null) {
-    query.set("offset", String(params.offset));
-  }
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      query.set(key, String(value));
+    }
+  });
   const queryString = query.toString();
   return queryString ? `${path}?${queryString}` : path;
 }
