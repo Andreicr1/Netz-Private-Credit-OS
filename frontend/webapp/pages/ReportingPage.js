@@ -67,7 +67,7 @@ function buildGovernanceStrip(payload) {
   strip.design = "Warning";
   strip.hideCloseButton = true;
   const latencyText = signal.latency == null ? "n/a" : `${signal.latency}ms`;
-  strip.textContent = `Data governance warning — latency ${latencyText} (threshold ${signal.threshold}ms), quality ${signal.quality}.`;
+  strip.textContent = `Data quality notice — latency ${latencyText} (threshold ${signal.threshold}ms), quality ${signal.quality}.`;
   return strip;
 }
 
@@ -105,7 +105,7 @@ function buildKpiCard({ title, value, status = "Information" }) {
 
   const objectStatus = document.createElement("ui5-object-status");
   objectStatus.state = status;
-  objectStatus.text = "as-of backend";
+  objectStatus.text = "Current snapshot";
 
   body.append(main, objectStatus);
   card.appendChild(body);
@@ -165,7 +165,6 @@ export class ReportingPage {
         reportType: "",
       },
       savedView: "PUBLISHING",
-      activeFiltersCount: 0,
       asOf: "—",
     };
 
@@ -208,7 +207,7 @@ export class ReportingPage {
 
     const header = document.createElement("ui5-card-header");
     header.titleText = "Layer 1 — Command";
-    header.subtitleText = "Reporting filters and governed actions";
+    header.subtitleText = "Reporting Filters";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -231,10 +230,6 @@ export class ReportingPage {
     const right = document.createElement("div");
     right.className = "netz-wave-command-meta";
     right.setAttribute("slot", "endContent");
-
-    this.activeFiltersTag = document.createElement("ui5-tag");
-    this.activeFiltersTag.design = "Information";
-    right.appendChild(this.activeFiltersTag);
 
     this.asOfTag = document.createElement("ui5-tag");
     this.asOfTag.design = "Neutral";
@@ -262,7 +257,7 @@ export class ReportingPage {
     applyBtn.addEventListener("click", () => this._applyFilters());
 
     const resetBtn = document.createElement("ui5-button");
-    resetBtn.design = "Default";
+    resetBtn.design = "Transparent";
     resetBtn.textContent = "Reset";
     resetBtn.addEventListener("click", () => this._clearFilters());
 
@@ -367,8 +362,6 @@ export class ReportingPage {
   }
 
   _refreshCommandMeta() {
-    this.state.activeFiltersCount = [this.state.filters.period, this.state.filters.reportType].filter(Boolean).length;
-    this.activeFiltersTag.textContent = `Filters ${this.state.activeFiltersCount}`;
     this.asOfTag.textContent = `As of: ${this.state.asOf}`;
   }
 
@@ -413,11 +406,11 @@ export class ReportingPage {
 
   _renderOperational(rows) {
     const columns = [
-      { key: "reportName", label: "Report Name", priority: "P1" },
-      { key: "period", label: "Period", priority: "P1" },
-      { key: "status", label: "Status", priority: "P1" },
-      { key: "version", label: "Version", priority: "P2" },
-      { key: "publishedDate", label: "Published Date", priority: "P2" },
+      { key: "reportName", label: "Report Name", priority: "CORE" },
+      { key: "period", label: "Period", priority: "CORE" },
+      { key: "status", label: "Status", priority: "CORE" },
+      { key: "version", label: "Version", priority: "SUPPORT" },
+      { key: "publishedDate", label: "Published Date", priority: "SUPPORT" },
     ];
 
     const tableRows = rows.map((row) => ({
@@ -456,13 +449,13 @@ export class ReportingPage {
 
   async _downloadLatestPublished() {
     if (!this.latestPublishedPack) {
-      this._setError("Download blocked by governance: no published report pack available.");
+      this._setError("No published report is available for download.");
       return;
     }
 
     const packId = firstDefined(this.latestPublishedPack.id, this.latestPublishedPack.pack_id);
     if (!packId) {
-      this._setError("Download blocked by governance: missing pack identifier.");
+      this._setError("Unable to download: missing report identifier.");
       return;
     }
 
@@ -479,7 +472,7 @@ export class ReportingPage {
 
   async _exportEvidencePack() {
     if (!this.latestPublishedPack) {
-      this._setError("Export blocked by governance: no published report pack available.");
+      this._setError("No published report is available for export.");
       return;
     }
 

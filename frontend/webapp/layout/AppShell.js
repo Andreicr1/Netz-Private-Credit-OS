@@ -9,7 +9,7 @@ import { CashManagementPage } from "../pages/CashManagementPage.js";
 import { CompliancePage } from "../pages/CompliancePage.js";
 import { ReportingPage } from "../pages/ReportingPage.js";
 import { PortfolioPage } from "../pages/PortfolioPage.js";
-import { DealsPipelinePage } from "../pages/DealsPipelinePage.js";
+import { DealsPage } from "../pages/DealsPipelinePage.js";
 import { SignaturesPage } from "../pages/SignaturesPage.js";
 import { SignatureDetailView } from "../workflows/SignatureDetailView.js";
 
@@ -145,7 +145,7 @@ export class AppShell {
         this._renderPage(new PortfolioPage({ fundId: this._fundId }));
         break;
       case "/deals":
-        this._renderPage(new DealsPipelinePage({ fundId: this._fundId }));
+        this._renderPage(new DealsPage({ fundId: this._fundId }));
         break;
       case "/dataroom":
       case "/data-room":

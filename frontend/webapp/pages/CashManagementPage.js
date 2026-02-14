@@ -78,7 +78,7 @@ function buildGovernanceStrip(payload) {
   strip.design = "Warning";
   strip.hideCloseButton = true;
   const latencyText = signal.latency == null ? "n/a" : `${signal.latency}ms`;
-  strip.textContent = `Data governance warning — latency ${latencyText} (threshold ${signal.threshold}ms), quality ${signal.quality}.`;
+  strip.textContent = `Data quality notice — latency ${latencyText} (threshold ${signal.threshold}ms), quality ${signal.quality}.`;
   return strip;
 }
 
@@ -116,7 +116,7 @@ function buildKpiCard({ title, value, status = "Information" }) {
 
   const objectStatus = document.createElement("ui5-object-status");
   objectStatus.state = status;
-  objectStatus.text = "as-of backend";
+  objectStatus.text = "Current snapshot";
 
   body.append(main, objectStatus);
   card.appendChild(body);
@@ -126,9 +126,9 @@ function buildKpiCard({ title, value, status = "Information" }) {
 function buildDenseTable(columns, rows) {
   const viewportWidth = window.innerWidth || 1440;
   const visibleColumns = viewportWidth <= 960
-    ? columns.filter((column) => column.priority === "P1")
+    ? columns.filter((column) => column.priority === "CORE")
     : viewportWidth <= 1280
-      ? columns.filter((column) => column.priority !== "P3")
+      ? columns.filter((column) => column.priority !== "OPTIONAL")
       : columns;
   const hiddenColumns = columns.filter((column) => !visibleColumns.includes(column));
 
@@ -211,7 +211,6 @@ export class CashManagementPage {
         dateRange: "",
       },
       savedView: "TREASURY",
-      activeFiltersCount: 0,
       asOf: "—",
     };
     this.lastTransactionsRows = [];
@@ -253,7 +252,7 @@ export class CashManagementPage {
 
     const header = document.createElement("ui5-card-header");
     header.titleText = "Layer 1 — Command";
-    header.subtitleText = "Cash query filters";
+    header.subtitleText = "Treasury Filters";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -276,10 +275,6 @@ export class CashManagementPage {
     const right = document.createElement("div");
     right.className = "netz-wave-command-meta";
     right.setAttribute("slot", "endContent");
-
-    this.activeFiltersTag = document.createElement("ui5-tag");
-    this.activeFiltersTag.design = "Information";
-    right.appendChild(this.activeFiltersTag);
 
     this.asOfTag = document.createElement("ui5-tag");
     this.asOfTag.design = "Neutral";
@@ -309,7 +304,7 @@ export class CashManagementPage {
     applyBtn.addEventListener("click", () => this._applyFilters());
 
     const resetBtn = document.createElement("ui5-button");
-    resetBtn.design = "Default";
+    resetBtn.design = "Transparent";
     resetBtn.textContent = "Reset";
     resetBtn.addEventListener("click", () => this._clearFilters());
 
@@ -416,13 +411,6 @@ export class CashManagementPage {
   }
 
   _refreshCommandMeta() {
-    this.state.activeFiltersCount = [
-      this.state.filters.account,
-      this.state.filters.currency,
-      this.state.filters.dateRange,
-    ].filter(Boolean).length;
-
-    this.activeFiltersTag.textContent = `Filters ${this.state.activeFiltersCount}`;
     this.asOfTag.textContent = `As of: ${this.state.asOf}`;
   }
 
@@ -487,23 +475,23 @@ export class CashManagementPage {
 
     this.kpiStrip.replaceChildren(
       buildKpiCard({ title: "Cash Available", value: formatCurrency(cashAvailable), status: "Success" }),
-      buildKpiCard({ title: "Runway Days", value: safe(runwayDays), status: "Information" }),
+      buildKpiCard({ title: "Runway", value: safe(runwayDays), status: "Information" }),
       buildKpiCard({ title: "Pending Calls", value: safe(pendingCalls), status: Number(pendingCalls) > 0 ? "Warning" : "Success" }),
     );
   }
 
   _renderOperational(data) {
     const transactionsColumns = [
-      { key: "transactionId", label: "Transaction ID", priority: "P1" },
-      { key: "bookingDate", label: "Booking Date", priority: "P1" },
-      { key: "valueDate", label: "Value Date", priority: "P2" },
-      { key: "counterparty", label: "Counterparty", priority: "P1" },
-      { key: "currency", label: "Currency", priority: "P2" },
-      { key: "amount", label: "Amount", priority: "P1" },
-      { key: "matchStatus", label: "Match Status", priority: "P1" },
-      { key: "approvalStatus", label: "Approval Status", priority: "P1" },
-      { key: "agingBucket", label: "Aging Bucket", priority: "P2" },
-      { key: "enteredBy", label: "Entered By", priority: "P3" },
+      { key: "transactionId", label: "Transaction ID", priority: "CORE" },
+      { key: "bookingDate", label: "Booking Date", priority: "CORE" },
+      { key: "valueDate", label: "Value Date", priority: "SUPPORT" },
+      { key: "counterparty", label: "Counterparty", priority: "CORE" },
+      { key: "currency", label: "Currency", priority: "SUPPORT" },
+      { key: "amount", label: "Amount", priority: "CORE" },
+      { key: "matchStatus", label: "Match Status", priority: "CORE" },
+      { key: "approvalStatus", label: "Approval Status", priority: "CORE" },
+      { key: "agingBucket", label: "Aging Bucket", priority: "SUPPORT" },
+      { key: "enteredBy", label: "Entered By", priority: "OPTIONAL" },
     ];
 
     const transactionsRows = toItems(data.transactions).map((row) => ({

@@ -153,6 +153,13 @@ def _verify_entra_jwt(token: str) -> dict[str, Any]:
     refined once tenant/audience details are finalized.
     """
     if not settings.oidc_jwks_url:
+        if settings.AUTHZ_BYPASS_ENABLED:
+            # OIDC not configured yet — decode payload without verification
+            # so that we can still extract claims (actor_id, email, roles).
+            try:
+                return jwt.decode(token, options={"verify_signature": False})
+            except Exception:
+                return {}
         raise NotImplementedError("OIDC JWKS URL is not configured")
     jwk_client = PyJWKClient(str(settings.oidc_jwks_url))
     signing_key = jwk_client.get_signing_key_from_jwt(token)
@@ -247,6 +254,15 @@ def actor_from_request(request: Request) -> Actor:
 
     token = _get_bearer_token(request) or _get_forwarded_aad_token(request)
     if not token:
+        # When AUTHZ_BYPASS_ENABLED, create a default bypass actor so
+        # requests are not blocked while Entra RBAC is being configured.
+        if settings.AUTHZ_BYPASS_ENABLED:
+            return Actor(
+                actor_id="authz-bypass-anonymous",
+                roles=(Role.ADMIN,),
+                fund_ids=(),
+                is_admin=True,
+            )
         if settings.env == Env.prod:
             raise PermissionError("Missing bearer token")
         # In non-prod, allow missing auth (explicitly deny later per endpoint)

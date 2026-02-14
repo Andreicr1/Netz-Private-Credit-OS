@@ -106,7 +106,7 @@ function buildKpiCard({ title, value, status = "Information" }) {
 
   const objectStatus = document.createElement("ui5-object-status");
   objectStatus.state = status;
-  objectStatus.text = "as-of backend";
+  objectStatus.text = "Current snapshot";
 
   body.append(main, objectStatus);
   card.appendChild(body);
@@ -173,7 +173,6 @@ export class CompliancePage {
         owner: "",
       },
       savedView: "REGULATORY",
-      activeFiltersCount: 0,
       asOf: "—",
     };
 
@@ -238,10 +237,6 @@ export class CompliancePage {
     right.className = "netz-wave-command-meta";
     right.setAttribute("slot", "endContent");
 
-    this.activeFiltersTag = document.createElement("ui5-tag");
-    this.activeFiltersTag.design = "Information";
-    right.appendChild(this.activeFiltersTag);
-
     this.asOfTag = document.createElement("ui5-tag");
     this.asOfTag.design = "Neutral";
     right.appendChild(this.asOfTag);
@@ -271,7 +266,7 @@ export class CompliancePage {
     applyBtn.addEventListener("click", () => this._applyFilters());
 
     const resetBtn = document.createElement("ui5-button");
-    resetBtn.design = "Default";
+    resetBtn.design = "Transparent";
     resetBtn.textContent = "Reset";
     resetBtn.addEventListener("click", () => this._clearFilters());
 
@@ -398,13 +393,6 @@ export class CompliancePage {
   }
 
   _refreshCommandMeta() {
-    this.state.activeFiltersCount = [
-      this.state.filters.obligationType,
-      this.state.filters.dueWindow,
-      this.state.filters.owner,
-    ].filter(Boolean).length;
-
-    this.activeFiltersTag.textContent = `Filters ${this.state.activeFiltersCount}`;
     this.asOfTag.textContent = `As of: ${this.state.asOf}`;
   }
 
@@ -487,12 +475,12 @@ export class CompliancePage {
     });
 
     const columns = [
-      { key: "covenant", label: "Covenant", priority: "P1" },
-      { key: "threshold", label: "Threshold", priority: "P1" },
-      { key: "actual", label: "Actual", priority: "P1" },
-      { key: "breachFlag", label: "Breach Flag", priority: "P1" },
-      { key: "lastTested", label: "Last Tested", priority: "P2" },
-      { key: "evidenceLink", label: "Evidence Link", priority: "P2" },
+      { key: "covenant", label: "Covenant", priority: "CORE" },
+      { key: "threshold", label: "Threshold", priority: "CORE" },
+      { key: "actual", label: "Actual", priority: "CORE" },
+      { key: "breachFlag", label: "Breach Flag", priority: "CORE" },
+      { key: "lastTested", label: "Last Tested", priority: "SUPPORT" },
+      { key: "evidenceLink", label: "Evidence Link", priority: "SUPPORT" },
     ];
 
     this.covenantHost.replaceChildren(buildDenseTable(columns, rows));
@@ -500,12 +488,12 @@ export class CompliancePage {
 
   _renderOperational(obligationsRows) {
     const columns = [
-      { key: "obligation", label: "Obligation", priority: "P1" },
-      { key: "dueDate", label: "Due Date", priority: "P1" },
-      { key: "evidenceStatus", label: "Evidence Status", priority: "P1" },
-      { key: "workflowStatus", label: "Workflow Status", priority: "P2" },
-      { key: "type", label: "Type", priority: "P2" },
-      { key: "owner", label: "Owner", priority: "P3" },
+      { key: "obligation", label: "Obligation", priority: "CORE" },
+      { key: "dueDate", label: "Due Date", priority: "CORE" },
+      { key: "evidenceStatus", label: "Evidence Status", priority: "CORE" },
+      { key: "workflowStatus", label: "Workflow Status", priority: "SUPPORT" },
+      { key: "type", label: "Type", priority: "SUPPORT" },
+      { key: "owner", label: "Owner", priority: "OPTIONAL" },
     ];
 
     const rows = obligationsRows.map((row) => ({
@@ -541,10 +529,6 @@ export class CompliancePage {
       {
         text: "As of",
         description: safe(this.state.asOf),
-      },
-      {
-        text: "Filters Applied",
-        description: safe(this.state.activeFiltersCount),
       },
       {
         text: "View",
