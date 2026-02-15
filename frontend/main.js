@@ -94,6 +94,7 @@ import "@ui5/webcomponents-fiori/dist/NotificationList.js";
 import "@ui5/webcomponents-fiori/dist/NotificationListItem.js";
 
 import "./webapp/css/style.css";
+import "./webapp/css/style-v2.css";
 
 import { AppShell } from "./webapp/layout/AppShell.js";
 

@@ -41,6 +41,7 @@ export class AssetsPage {
     refresh.addEventListener("click", () => this.onShow());
 
     const create = document.createElement("ui5-button");
+    create.design = "Transparent";
     create.textContent = "Create Asset";
     create.addEventListener("click", () => this.createAsset());
 

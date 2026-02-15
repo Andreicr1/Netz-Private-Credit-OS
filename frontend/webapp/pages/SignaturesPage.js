@@ -89,12 +89,6 @@ function buildWorkflowList(rows, onSelect) {
     const item = document.createElement("button");
     item.type = "button";
     item.className = "netz-entity-row";
-    item.style.width = "100%";
-    item.style.textAlign = "left";
-    item.style.background = "transparent";
-    item.style.border = "none";
-    item.style.cursor = "pointer";
-    item.style.fontFamily = "inherit";
 
     const title = document.createElement("div");
     title.className = "netz-entity-title";
@@ -131,12 +125,6 @@ function buildSelectableList(items, onSelect) {
     const row = document.createElement("button");
     row.type = "button";
     row.className = "netz-entity-row";
-    row.style.width = "100%";
-    row.style.textAlign = "left";
-    row.style.background = "transparent";
-    row.style.border = "none";
-    row.style.cursor = "pointer";
-    row.style.fontFamily = "inherit";
 
     const title = document.createElement("div");
     title.className = "netz-entity-title";
@@ -221,8 +209,7 @@ export class SignaturesPage {
     body.className = "netz-fcl-body";
 
     const controls = document.createElement("div");
-    controls.className = "netz-multi";
-    controls.style.padding = "0 0 0.75rem 0";
+    controls.className = "netz-multi netz-fcl-filter-bar";
 
     this.statusSelect = document.createElement("ui5-select");
     this.statusSelect.accessibleName = "Status";
@@ -351,8 +338,7 @@ export class SignaturesPage {
 
     if (item.preview) {
       const preview = document.createElement("div");
-      preview.className = "netz-meta-text";
-      preview.style.marginTop = "0.75rem";
+      preview.className = "netz-meta-text netz-fcl-preview";
       preview.textContent = safe(item.preview);
       this.subDetailBody.appendChild(preview);
     }

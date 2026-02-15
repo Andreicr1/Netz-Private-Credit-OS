@@ -86,6 +86,21 @@ body {
   background: var(--sapShell_Background);
 }
 
+/* FCL begin-column filter bar (overrides netz-multi padding) */
+.netz-fcl-filter-bar {
+  padding: 0 0 0.75rem 0;
+}
+
+/* FCL sub-detail preview spacing */
+.netz-fcl-preview {
+  margin-top: 0.75rem;
+}
+
+/* Column modifier — mid gets flex priority */
+.netz-fcl-col--mid {
+  flex: 1;
+}
+
 /* Responsive collapse */
 @media (max-width: 1280px) {
   .netz-fcl {
@@ -102,7 +117,8 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .netz-fcl-col--begin {
+  .netz-fcl-col--begin,
+  .netz-fcl-col--mid {
     display: none;
   }
 }
@@ -116,6 +132,16 @@ body {
   display: grid;
   gap: 0.25rem;
   border-bottom: 1px solid var(--sapList_BorderColor);
+}
+
+/* Button reset for entity row navigation (FCL Begin Column) */
+button.netz-entity-row {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .netz-entity-row:last-child {
@@ -226,20 +252,22 @@ body {
 }
 
 /* ─────────────────────────────────────────────
+   5b. TABLE BASELINE
+   ───────────────────────────────────────────── */
+
+.netz-table {
+  width: 100%;
+}
+
+/* ─────────────────────────────────────────────
    6. GLOBAL BUTTON STANDARD
    ───────────────────────────────────────────── */
 
-.netz-btn-primary {
-  font-weight: 600;
-}
-
-.netz-btn-secondary {
-  opacity: 0.85;
-}
-
-.netz-btn-tertiary {
-  font-size: var(--sapFontSmallSize);
-}
+/* Button styling handled via ui5-button design attribute:
+   Primary (Apply)     → design="Emphasized"
+   Secondary (Reset)   → design="Transparent"
+   Tertiary (Export)   → design="Transparent"
+   Semantic            → design="Attention" / "Positive" / "Negative" */
 
 /* ============================================================
    END OF STYLE V2

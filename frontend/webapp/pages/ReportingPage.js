@@ -112,9 +112,9 @@ function buildKpiCard({ title, value, status = "Information" }) {
   return card;
 }
 
-function buildDenseTable(columns, rows) {
+function buildTable(columns, rows) {
   const table = document.createElement("ui5-table");
-  table.className = "netz-wave-table-dense";
+  table.className = "netz-table";
 
   const headerRow = document.createElement("ui5-table-header-row");
   headerRow.setAttribute("slot", "headerRow");
@@ -422,7 +422,7 @@ export class ReportingPage {
       raw: row,
     }));
 
-    this.tableHost.replaceChildren(buildDenseTable(columns, tableRows));
+    this.tableHost.replaceChildren(buildTable(columns, tableRows));
   }
 
   _renderMonitoring(rows) {

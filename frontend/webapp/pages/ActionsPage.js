@@ -105,22 +105,22 @@ function buildKpiCard({ title, value, status = "Information" }) {
 
   const objectStatus = document.createElement("ui5-object-status");
   objectStatus.state = status;
-  objectStatus.text = "as-of backend";
+  objectStatus.text = "Current snapshot";
 
   body.append(main, objectStatus);
   card.appendChild(body);
   return card;
 }
 
-function buildDenseTable(columns, rows) {
+function buildTable(columns, rows) {
   const table = document.createElement("ui5-table");
-  table.className = "netz-wave-table-dense";
+  table.className = "netz-table";
 
   const headerRow = document.createElement("ui5-table-header-row");
   headerRow.setAttribute("slot", "headerRow");
   columns.forEach((column) => {
     const headerCell = document.createElement("ui5-table-header-cell");
-    headerCell.textContent = `${column.label} ${column.priority}`;
+    headerCell.textContent = column.label;
     headerRow.appendChild(headerCell);
   });
   table.appendChild(headerRow);
@@ -165,8 +165,8 @@ export class ActionsPage {
         slaWindow: "",
         owner: "",
       },
-      savedView: "DEFAULT",
-      activeFiltersCount: 0,
+      savedView: "ALL",
+      filterCount: 0,
       asOf: "—",
     };
 
@@ -256,7 +256,7 @@ export class ActionsPage {
 
     this.savedViewSelect = document.createElement("ui5-select");
     this.savedViewSelect.accessibleName = "Saved View";
-    setOptions(this.savedViewSelect, ["DEFAULT", "RISK", "OPERATIONS"], this.state.savedView);
+    setOptions(this.savedViewSelect, ["All", "Risk", "Operations"], this.state.savedView);
 
     const applyBtn = document.createElement("ui5-button");
     applyBtn.design = "Emphasized";
@@ -304,7 +304,7 @@ export class ActionsPage {
 
     const header = document.createElement("ui5-card-header");
     header.titleText = "Layer 3 — Operational";
-    header.subtitleText = "Action Queue Table (dense)";
+    header.subtitleText = "Action Queue";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -359,18 +359,18 @@ export class ActionsPage {
   }
 
   _refreshCommandMeta() {
-    this.state.activeFiltersCount = [
+    this.state.filterCount = [
       this.state.filters.status,
       this.state.filters.slaWindow,
       this.state.filters.owner,
     ].filter(Boolean).length;
 
-    this.activeFiltersTag.textContent = `activeFiltersCount ${this.state.activeFiltersCount}`;
-    this.asOfTag.textContent = `asOf ${this.state.asOf}`;
+    this.activeFiltersTag.textContent = `Filters: ${this.state.filterCount}`;
+    this.asOfTag.textContent = `As of: ${this.state.asOf}`;
   }
 
   _applyFilters() {
-    this.state.savedView = String(this.savedViewSelect.selectedOption?.value || "DEFAULT");
+    this.state.savedView = String(this.savedViewSelect.selectedOption?.value || "All");
     this.state.filters = {
       status: this.statusSelect.selectedOption?.value || "",
       slaWindow: this.slaSelect.selectedOption?.value || "",
@@ -381,7 +381,7 @@ export class ActionsPage {
 
   _clearFilters() {
     this.state.filters = { status: "", slaWindow: "", owner: "" };
-    this.state.savedView = "DEFAULT";
+    this.state.savedView = "All";
     this.onShow();
   }
 
@@ -410,12 +410,12 @@ export class ActionsPage {
 
   _renderOperational(rows) {
     const columns = [
-      { key: "action", label: "Action", priority: "P1" },
-      { key: "slaDue", label: "SLA Due", priority: "P1" },
-      { key: "priority", label: "Priority", priority: "P1" },
-      { key: "status", label: "Status", priority: "P2" },
-      { key: "domain", label: "Domain", priority: "P2" },
-      { key: "owner", label: "Owner", priority: "P3" },
+      { key: "action", label: "Action" },
+      { key: "slaDue", label: "SLA Due" },
+      { key: "priority", label: "Priority" },
+      { key: "status", label: "Status" },
+      { key: "domain", label: "Domain" },
+      { key: "owner", label: "Owner" },
     ];
 
     const tableRows = rows.map((row) => ({
@@ -427,7 +427,7 @@ export class ActionsPage {
       owner: firstDefined(row.owner, row.owner_name, row.assignee),
     }));
 
-    this.queueHost.replaceChildren(buildDenseTable(columns, tableRows));
+    this.queueHost.replaceChildren(buildTable(columns, tableRows));
   }
 
   _renderMonitoring(rows) {

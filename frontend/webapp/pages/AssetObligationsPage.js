@@ -33,10 +33,12 @@ export class AssetObligationsPage {
     load.addEventListener("click", () => this.onShow());
 
     const create = document.createElement("ui5-button");
+    create.design = "Transparent";
     create.textContent = "Create Asset Obligation";
     create.addEventListener("click", () => this.create());
 
     const update = document.createElement("ui5-button");
+    update.design = "Transparent";
     update.textContent = "Update Obligation";
     update.addEventListener("click", () => this.update());
 

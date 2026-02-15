@@ -123,7 +123,7 @@ function buildKpiCard({ title, value, status = "Information" }) {
   return card;
 }
 
-function buildDenseTable(columns, rows) {
+function buildTable(columns, rows) {
   const viewportWidth = window.innerWidth || 1440;
   const visibleColumns = viewportWidth <= 960
     ? columns.filter((column) => column.priority === "CORE")
@@ -133,7 +133,7 @@ function buildDenseTable(columns, rows) {
   const hiddenColumns = columns.filter((column) => !visibleColumns.includes(column));
 
   const table = document.createElement("ui5-table");
-  table.className = "netz-wave-table-dense";
+  table.className = "netz-table";
 
   const headerRow = document.createElement("ui5-table-header-row");
   headerRow.setAttribute("slot", "headerRow");
@@ -509,7 +509,7 @@ export class CashManagementPage {
 
     this.lastTransactionsRows = transactionsRows;
 
-    this.transactionsHost.replaceChildren(buildDenseTable(transactionsColumns, transactionsRows));
+    this.transactionsHost.replaceChildren(buildTable(transactionsColumns, transactionsRows));
   }
 
   _renderMonitoring(unmatchedPayload, reportPayload) {

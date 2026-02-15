@@ -98,16 +98,16 @@ function buildKpiCard({ title, value, status = "Information" }) {
 
   const objectStatus = document.createElement("ui5-object-status");
   objectStatus.state = status;
-  objectStatus.text = "as-of backend";
+  objectStatus.text = "Current snapshot";
 
   body.append(main, objectStatus);
   card.appendChild(body);
   return card;
 }
 
-function buildDenseTable(columns, rows) {
+function buildTable(columns, rows) {
   const table = document.createElement("ui5-table");
-  table.className = "netz-wave-table-dense";
+  table.className = "netz-table";
 
   const headerRow = document.createElement("ui5-table-header-row");
   headerRow.setAttribute("slot", "headerRow");
@@ -154,7 +154,7 @@ export class DashboardPage {
     this.fundId = fundId;
     this.state = {
       asOf: "—",
-      activeFiltersCount: 1,
+      filterCount: 1,
       view: "INSTITUTIONAL",
     };
 
@@ -323,7 +323,7 @@ export class DashboardPage {
   _refreshCommandMeta() {
     this.fundTag.textContent = `fund ${safe(this.fundId)}`;
     this.asOfTag.textContent = `As of: ${this.state.asOf}`;
-    this.activeTag.textContent = `Filters ${safe(this.state.activeFiltersCount)}`;
+    this.activeTag.textContent = `Filters: ${safe(this.state.filterCount)}`;
   }
 
   _setLayerGovernance(host, payload) {
@@ -388,14 +388,14 @@ export class DashboardPage {
       });
 
     const columns = [
-      { key: "action", label: "Action", priority: "P1" },
-      { key: "owner", label: "Owner", priority: "P1" },
-      { key: "due", label: "Due", priority: "P1" },
-      { key: "source", label: "Source", priority: "P2" },
-      { key: "status", label: "Status", priority: "P2" },
+      { key: "action", label: "Action" },
+      { key: "owner", label: "Owner" },
+      { key: "due", label: "Due" },
+      { key: "source", label: "Source" },
+      { key: "status", label: "Status" },
     ];
 
-    this.actionsQueueHost.replaceChildren(buildDenseTable(columns, actionRows));
+    this.actionsQueueHost.replaceChildren(buildTable(columns, actionRows));
   }
 
   _renderMonitoring(viewData) {

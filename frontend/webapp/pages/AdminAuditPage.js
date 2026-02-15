@@ -90,28 +90,28 @@ function setOptions(select, options, selected) {
   });
 }
 
-function buildDenseTable(columns, rows) {
+function buildTable(columns, rows) {
   const viewportWidth = window.innerWidth || 1440;
   const visibleColumns = viewportWidth <= 960
-    ? columns.filter((column) => column.priority === "P1")
+    ? columns.filter((column) => column.visibility === "CORE")
     : viewportWidth <= 1280
-      ? columns.filter((column) => column.priority !== "P3")
+      ? columns.filter((column) => column.visibility !== "OPTIONAL")
       : columns;
   const hiddenColumns = columns.filter((column) => !visibleColumns.includes(column));
 
   const table = document.createElement("ui5-table");
-  table.className = "netz-wave-table-dense";
+  table.className = "netz-table";
 
   const headerRow = document.createElement("ui5-table-header-row");
   headerRow.setAttribute("slot", "headerRow");
   visibleColumns.forEach((column) => {
     const headerCell = document.createElement("ui5-table-header-cell");
-    headerCell.textContent = `${column.label} ${column.priority}`;
+    headerCell.textContent = column.label;
     headerRow.appendChild(headerCell);
   });
   if (hiddenColumns.length) {
     const detailsHeader = document.createElement("ui5-table-header-cell");
-    detailsHeader.textContent = "Details P1";
+    detailsHeader.textContent = "Details";
     headerRow.appendChild(detailsHeader);
   }
   table.appendChild(headerRow);
@@ -180,8 +180,8 @@ export class AdminAuditPage {
         actionType: "",
         dateRange: "",
       },
-      savedView: "DEFAULT",
-      activeFiltersCount: 0,
+      savedView: "All",
+      filterCount: 0,
       asOf: "—",
     };
 
@@ -269,7 +269,7 @@ export class AdminAuditPage {
 
     this.savedViewSelect = document.createElement("ui5-select");
     this.savedViewSelect.accessibleName = "Saved View";
-    setOptions(this.savedViewSelect, ["DEFAULT", "GOVERNANCE", "OPERATIONS"], this.state.savedView);
+    setOptions(this.savedViewSelect, ["All", "Governance", "Operations"], this.state.savedView);
 
     const applyBtn = document.createElement("ui5-button");
     applyBtn.design = "Emphasized";
@@ -294,7 +294,7 @@ export class AdminAuditPage {
 
     const header = document.createElement("ui5-card-header");
     header.titleText = "Layer 3 — Operational";
-    header.subtitleText = "Audit Log Table (dense)";
+    header.subtitleText = "Audit Log";
     header.setAttribute("slot", "header");
     card.appendChild(header);
 
@@ -349,13 +349,13 @@ export class AdminAuditPage {
   }
 
   _refreshCommandMeta() {
-    this.state.activeFiltersCount = [this.state.filters.user, this.state.filters.actionType, this.state.filters.dateRange].filter(Boolean).length;
-    this.activeFiltersTag.textContent = `activeFiltersCount ${this.state.activeFiltersCount}`;
-    this.asOfTag.textContent = `asOf ${this.state.asOf}`;
+    this.state.filterCount = [this.state.filters.user, this.state.filters.actionType, this.state.filters.dateRange].filter(Boolean).length;
+    this.activeFiltersTag.textContent = `Filters: ${this.state.filterCount}`;
+    this.asOfTag.textContent = `As of: ${this.state.asOf}`;
   }
 
   _applyFilters() {
-    this.state.savedView = String(this.savedViewSelect.selectedOption?.value || "DEFAULT");
+    this.state.savedView = String(this.savedViewSelect.selectedOption?.value || "All");
     this.state.filters = {
       user: this.userSelect.selectedOption?.value || "",
       actionType: this.actionTypeSelect.selectedOption?.value || "",
@@ -366,7 +366,7 @@ export class AdminAuditPage {
 
   _clearFilters() {
     this.state.filters = { user: "", actionType: "", dateRange: "" };
-    this.state.savedView = "DEFAULT";
+    this.state.savedView = "All";
     this.dateRange.value = "";
     this.onShow();
   }
@@ -379,16 +379,16 @@ export class AdminAuditPage {
 
   _renderOperational(rows) {
     const columns = [
-      { key: "timestampUtc", label: "Timestamp (UTC)", priority: "P1" },
-      { key: "actor", label: "Actor", priority: "P1" },
-      { key: "role", label: "Role", priority: "P2" },
-      { key: "action", label: "Action", priority: "P1" },
-      { key: "entityType", label: "Entity Type", priority: "P2" },
-      { key: "entityId", label: "Entity ID", priority: "P1" },
-      { key: "beforeStateHash", label: "Before State Hash", priority: "P3" },
-      { key: "afterStateHash", label: "After State Hash", priority: "P3" },
-      { key: "status", label: "Status", priority: "P1" },
-      { key: "ipAddress", label: "IP Address", priority: "P2" },
+      { key: "timestampUtc", label: "Timestamp (UTC)", visibility: "CORE" },
+      { key: "actor", label: "Actor", visibility: "CORE" },
+      { key: "role", label: "Role", visibility: "SUPPORT" },
+      { key: "action", label: "Action", visibility: "CORE" },
+      { key: "entityType", label: "Entity Type", visibility: "SUPPORT" },
+      { key: "entityId", label: "Entity ID", visibility: "CORE" },
+      { key: "beforeStateHash", label: "Before State Hash", visibility: "OPTIONAL" },
+      { key: "afterStateHash", label: "After State Hash", visibility: "OPTIONAL" },
+      { key: "status", label: "Status", visibility: "CORE" },
+      { key: "ipAddress", label: "IP Address", visibility: "SUPPORT" },
     ];
 
     const tableRows = rows.map((row) => ({
@@ -404,7 +404,7 @@ export class AdminAuditPage {
       ipAddress: firstDefined(row.ip_address, row.client_ip, row.source_ip),
     }));
 
-    this.tableHost.replaceChildren(buildDenseTable(columns, tableRows));
+    this.tableHost.replaceChildren(buildTable(columns, tableRows));
   }
 
   _renderMonitoring(healthPayload, azurePayload) {

@@ -21,14 +21,17 @@ export class ReportPacksLegacyPage {
     this.packId.placeholder = "Pack ID";
 
     const create = document.createElement("ui5-button");
+    create.design = "Transparent";
     create.textContent = "Create Legacy Report Pack";
     create.addEventListener("click", () => this.createPack());
 
     const generate = document.createElement("ui5-button");
+    generate.design = "Transparent";
     generate.textContent = "Generate Legacy Pack";
     generate.addEventListener("click", () => this.generatePack());
 
     const publish = document.createElement("ui5-button");
+    publish.design = "Transparent";
     publish.textContent = "Publish Legacy Pack";
     publish.addEventListener("click", () => this.publishPack());
 

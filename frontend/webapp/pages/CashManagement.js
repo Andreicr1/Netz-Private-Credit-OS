@@ -39,7 +39,7 @@ export class CashManagementPage {
     this.uploadStmtBtn = document.createElement("ui5-button");
     this.uploadStmtBtn.slot = "endContent";
     this.uploadStmtBtn.className = "netz-action-btn";
-    this.uploadStmtBtn.design = "Default";
+    this.uploadStmtBtn.design = "Transparent";
     this.uploadStmtBtn.icon = "upload";
     this.uploadStmtBtn.textContent = "Upload Statement (Manual Ingest)";
     this.uploadStmtBtn.addEventListener("click", () => {

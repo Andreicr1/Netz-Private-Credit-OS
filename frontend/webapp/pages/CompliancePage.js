@@ -113,9 +113,9 @@ function buildKpiCard({ title, value, status = "Information" }) {
   return card;
 }
 
-function buildDenseTable(columns, rows) {
+function buildTable(columns, rows) {
   const table = document.createElement("ui5-table");
-  table.className = "netz-wave-table-dense";
+  table.className = "netz-table";
 
   const headerRow = document.createElement("ui5-table-header-row");
   headerRow.setAttribute("slot", "headerRow");
@@ -483,7 +483,7 @@ export class CompliancePage {
       { key: "evidenceLink", label: "Evidence Link", priority: "SUPPORT" },
     ];
 
-    this.covenantHost.replaceChildren(buildDenseTable(columns, rows));
+    this.covenantHost.replaceChildren(buildTable(columns, rows));
   }
 
   _renderOperational(obligationsRows) {
@@ -505,7 +505,7 @@ export class CompliancePage {
       owner: firstDefined(row.owner, row.owner_name),
     }));
 
-    this.obligationsHost.replaceChildren(buildDenseTable(columns, rows));
+    this.obligationsHost.replaceChildren(buildTable(columns, rows));
   }
 
   _renderMonitoring(data) {

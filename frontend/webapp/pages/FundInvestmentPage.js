@@ -20,6 +20,7 @@ export class FundInvestmentPage {
     this.assetId.placeholder = "Asset ID";
 
     const create = document.createElement("ui5-button");
+    create.design = "Transparent";
     create.textContent = "Create Fund Investment";
     create.addEventListener("click", () => this.create());
 

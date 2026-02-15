@@ -25,6 +25,7 @@ export class EvidencePage {
     create.addEventListener("click", () => this.createUploadRequest());
 
     const complete = document.createElement("ui5-button");
+    complete.design = "Transparent";
     complete.textContent = "Complete Evidence";
     complete.addEventListener("click", () => this.complete());
 

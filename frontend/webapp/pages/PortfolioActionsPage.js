@@ -31,6 +31,7 @@ export class PortfolioActionsPage {
     load.textContent = "Load Actions";
     load.addEventListener("click", () => this.onShow());
     const update = document.createElement("ui5-button");
+    update.design = "Transparent";
     update.textContent = "Update Action";
     update.addEventListener("click", () => this.updateAction());
     wrap.append(this.actionId, load, update, this.out);

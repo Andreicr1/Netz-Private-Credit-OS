@@ -58,6 +58,7 @@ export class AiPage {
     this.refreshButton.addEventListener("click", () => this.onShow());
 
     this.askButton = document.createElement("ui5-button");
+    this.askButton.design = "Transparent";
     this.askButton.textContent = "Retrieve + Answer";
     this.askButton.addEventListener("click", () => this.ask());
 

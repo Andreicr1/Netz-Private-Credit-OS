@@ -53,6 +53,7 @@ export class DocumentsPage {
     this.refreshButton.addEventListener("click", () => this.onShow());
 
     this.processPendingButton = document.createElement("ui5-button");
+    this.processPendingButton.design = "Transparent";
     this.processPendingButton.textContent = "Process Pending Ingestion";
     this.processPendingButton.addEventListener("click", () => this.processPending());
 
