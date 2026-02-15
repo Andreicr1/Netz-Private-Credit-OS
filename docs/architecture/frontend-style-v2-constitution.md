@@ -32,42 +32,61 @@ Every class listed below exists in `style-v2.css` and is the only sanctioned way
 ### 2.2 Flexible Column Layout (FCL — 3 Columns)
 
 Mandatory for: **Portfolio, Deals Pipeline, Signatures**
+Figma reference: SAP S/4HANA Web UI Kit — node `22471-103390`
 
 | Selector | Purpose |
 |---|---|
-| `.netz-fcl` | Grid root — 3 columns (`begin` / `mid` / `end`) |
-| `.netz-fcl-col` | Column primitive — border, background, flex column |
-| `.netz-fcl-col--begin` | Begin (left) column modifier |
-| `.netz-fcl-col--mid` | Mid (centre) column modifier — takes flex priority |
-| `.netz-fcl-col--end` | End (right) column modifier |
-| `.netz-fcl-header` | Column header bar |
+| `.netz-fcl` | Grid root — 3 columns (`begin` / `mid` / `end`), 360px / 1fr / 360px |
+| `.netz-fcl-col` | Column primitive — left border, flex column |
+| `.netz-fcl-col--begin` | Begin (left) column — list report style |
+| `.netz-fcl-col--mid` | Mid (centre) column — object page |
+| `.netz-fcl-col--end` | End (right) column — detail panel |
+| `.netz-fcl-header` | Column header — SAP ObjectHeader_Background, shadow |
+| `.netz-fcl-header-title` | Header title — sapFontHeader4Size, bold |
+| `.netz-fcl-search-row` | Search input + icon button row |
 | `.netz-fcl-body` | Scrollable column body |
-| `.netz-fcl-filter-bar` | Begin-column filter bar spacing (overrides netz-multi padding) |
+| `.netz-fcl-filter-bar` | Collapsible filter bar below header |
+| `.netz-fcl-end-header` | End column header — title + action buttons |
+| `.netz-fcl-end-header-title` | End column title text |
+| `.netz-fcl-end-header-actions` | End column icon button row (fullscreen/close) |
+| `.netz-fcl-end-content` | End column scrollable content area |
+| `.netz-fcl-form-card` | Form card — white background, rounded 12px |
+| `.netz-fcl-form-group-title` | Form group section title |
+| `.netz-fcl-form-item` | Form item — vertical label + value pair |
+| `.netz-fcl-tab-content` | Tab content padding |
 | `.netz-fcl-preview` | Sub-detail preview spacing |
 
 **Grid sizing:**
 
 ```
-begin:  minmax(22rem, 28rem)
-mid:    minmax(0, 1fr)
-end:    minmax(24rem, 32rem)
+begin:  360px (fixed)
+mid:    1fr (flex)
+end:    360px (fixed)
 ```
 
-### 2.3 Entity List Rows (Begin Column)
+**Begin column components:** `ui5-input[type=Search]`, `ui5-list` + `ui5-li[type=Navigation]`
+**Mid column components:** `ui5-avatar`, `ui5-title`, `ui5-tabcontainer` + `ui5-tab`
+**End column components:** `ui5-button[icon=full-screen]`, `ui5-button[icon=decline]`, `ui5-label`
+
+### 2.3 Entity List Rows (Legacy — retained for non-FCL use)
 
 | Selector | Purpose |
 |---|---|
 | `.netz-entity-row` | Bordered row primitive |
-| `button.netz-entity-row` | Button reset for entity row navigation (FCL) |
+| `button.netz-entity-row` | Button reset for entity row navigation |
 | `.netz-entity-title` | Row primary text (bold) |
 | `.netz-entity-meta` | Row secondary text strip |
 | `.netz-entity-badge` | Inline badge container |
+
+> FCL pages now use `ui5-list` + `ui5-li` with `type="Navigation"` instead.
 
 ### 2.4 Object Page Header (Mid Column)
 
 | Selector | Purpose |
 |---|---|
-| `.netz-object-header` | Vertical header stack |
+| `.netz-object-header` | Object header — white bg, shadow, flex column |
+| `.netz-object-header-row` | Avatar + title + info row |
+| `.netz-object-header-info` | Title + KPI column within header row |
 | `.netz-object-kpis` | Inline KPI strip under header |
 | `.netz-object-tabs` | Tab-section spacing token |
 
@@ -159,7 +178,7 @@ The following are **prohibited** across all frontend pages:
 
 ## 6. Selector Inventory Checksum
 
-Total V2 selectors: **30**
+Total V2 selectors: **43**
 
 ```
 .netz-page
@@ -171,9 +190,19 @@ Total V2 selectors: **30**
 .netz-fcl-col--begin
 .netz-fcl-col--mid
 .netz-fcl-col--end
-.netz-fcl-body
 .netz-fcl-header
+.netz-fcl-header-title
+.netz-fcl-search-row
+.netz-fcl-body
 .netz-fcl-filter-bar
+.netz-fcl-end-header
+.netz-fcl-end-header-title
+.netz-fcl-end-header-actions
+.netz-fcl-end-content
+.netz-fcl-form-card
+.netz-fcl-form-group-title
+.netz-fcl-form-item
+.netz-fcl-tab-content
 .netz-fcl-preview
 .netz-entity-row
 button.netz-entity-row
@@ -181,6 +210,8 @@ button.netz-entity-row
 .netz-entity-meta
 .netz-entity-badge
 .netz-object-header
+.netz-object-header-row
+.netz-object-header-info
 .netz-object-kpis
 .netz-object-tabs
 .netz-multi

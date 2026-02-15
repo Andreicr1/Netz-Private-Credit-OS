@@ -45,50 +45,162 @@ body {
 
 /* ─────────────────────────────────────────────
    2. FLEXIBLE COLUMN LAYOUT (FCL — 3 COLUMN)
+   SAP S/4HANA Figma reference: node 22471-103390
    Mandatory for Portfolio / Deals / Signatures
    ───────────────────────────────────────────── */
 
 .netz-fcl {
   display: grid;
-  grid-template-columns:
-    minmax(22rem, 28rem)   /* Begin Column */
-    minmax(0, 1fr)         /* Mid Column */
-    minmax(24rem, 32rem);  /* End Column */
-
+  grid-template-columns: 360px 1fr 360px;
   height: 100%;
-  gap: 0.75rem;
+  gap: 0;
   overflow: hidden;
 }
 
 /* Column primitive */
 .netz-fcl-col {
-  border: 1px solid var(--sapList_BorderColor);
-  border-radius: var(--sapElement_BorderCornerRadius);
-  background: var(--sapTile_Background);
-  box-shadow: var(--sapContent_Shadow0);
-
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  border-left: 1px solid var(--sapGroup_ContentBorderColor);
+}
+.netz-fcl-col:first-child {
+  border-left: none;
 }
 
-/* Column scroll body */
+/* Begin column */
+.netz-fcl-col--begin {
+  background: var(--sapBackgroundColor);
+}
+
+/* Mid column — flex priority */
+.netz-fcl-col--mid {
+  background: var(--sapBackgroundColor);
+}
+
+/* End column */
+.netz-fcl-col--end {
+  background: var(--sapBackgroundColor);
+}
+
+/* Column header — SAP ObjectHeader_Background */
+.netz-fcl-header {
+  padding: 0.5rem;
+  background: var(--sapObjectHeader_Background);
+  box-shadow: 0 2px 2px 0 rgba(34, 53, 72, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Column header title — sapFontHeader4Size */
+.netz-fcl-header-title {
+  font-size: var(--sapFontHeader4Size, 1.25rem);
+  color: var(--sapGroup_TitleTextColor);
+  font-weight: 600;
+  line-height: normal;
+}
+
+/* Search + icon button row */
+.netz-fcl-search-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.netz-fcl-search-row ui5-input {
+  flex: 1;
+}
+
+/* Column body (scrollable content) */
 .netz-fcl-body {
   flex: 1;
   overflow-y: auto;
-  padding: 0.75rem;
 }
 
-/* Column header */
-.netz-fcl-header {
-  padding: 0.75rem 0.75rem 0.5rem;
-  border-bottom: 1px solid var(--sapList_BorderColor);
-  background: var(--sapShell_Background);
-}
-
-/* FCL begin-column filter bar (overrides netz-multi padding) */
+/* Filter bar (collapsible below header) */
 .netz-fcl-filter-bar {
-  padding: 0 0 0.75rem 0;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--sapGroup_ContentBorderColor);
+  background: var(--sapGroup_ContentBackground);
+}
+
+/* End column header — title + action buttons */
+.netz-fcl-end-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 0.3125rem 1rem;
+  background: var(--sapObjectHeader_Background);
+  box-shadow: 0 2px 2px 0 rgba(34, 53, 72, 0.05);
+}
+
+.netz-fcl-end-header-title {
+  font-size: var(--sapFontHeader4Size, 1.25rem);
+  color: var(--sapGroup_TitleTextColor);
+  font-weight: 600;
+  padding-top: 0.3125rem;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.netz-fcl-end-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding-left: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* End column scrollable content */
+.netz-fcl-end-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Form card — SAP Group/ContentBackground, rounded 12px */
+.netz-fcl-form-card {
+  background: var(--sapGroup_ContentBackground);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Form group section title */
+.netz-fcl-form-group-title {
+  font-size: var(--sapFontSize);
+  font-weight: 600;
+  color: var(--sapGroup_TitleTextColor);
+}
+
+/* Form item — vertical label + value pair */
+.netz-fcl-form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.netz-fcl-form-item ui5-label {
+  color: var(--sapContent_LabelColor);
+}
+
+.netz-fcl-form-item .netz-fcl-value {
+  font-size: var(--sapFontSize);
+  color: var(--sapField_TextColor);
+}
+
+/* Tab content padding */
+.netz-fcl-tab-content {
+  padding: 0.5rem 0;
 }
 
 /* FCL sub-detail preview spacing */
@@ -96,15 +208,10 @@ body {
   margin-top: 0.75rem;
 }
 
-/* Column modifier — mid gets flex priority */
-.netz-fcl-col--mid {
-  flex: 1;
-}
-
 /* Responsive collapse */
 @media (max-width: 1280px) {
   .netz-fcl {
-    grid-template-columns: minmax(22rem, 28rem) 1fr;
+    grid-template-columns: 360px 1fr;
   }
 
   .netz-fcl-col--end {
@@ -167,12 +274,31 @@ button.netz-entity-row {
 
 /* ─────────────────────────────────────────────
    4. OBJECT PAGE HEADER (Mid Column Standard)
+   SAP S/4HANA: Avatar + Title + Facets
    ───────────────────────────────────────────── */
 
 .netz-object-header {
+  padding: 0.75rem 1rem;
+  background: var(--sapObjectHeader_Background);
+  box-shadow: 0 2px 2px 0 rgba(34, 53, 72, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Avatar + title row (SAP Object Header pattern) */
+.netz-object-header-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.netz-object-header-info {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  min-width: 0;
 }
 
 .netz-object-kpis {
@@ -185,7 +311,7 @@ button.netz-entity-row {
 
 /* Tabs spacing */
 .netz-object-tabs {
-  padding-top: 0.75rem;
+  padding-top: 0;
 }
 
 /* ─────────────────────────────────────────────

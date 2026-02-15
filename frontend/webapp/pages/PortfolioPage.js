@@ -96,36 +96,19 @@ function makeStatusBadge(text) {
 }
 
 function buildItemList(rows, onSelect) {
-  const list = document.createElement("div");
-  if (!rows.length) {
-    const empty = document.createElement("div");
-    empty.className = "netz-meta-text";
-    empty.textContent = "No records available.";
-    list.appendChild(empty);
-    return list;
-  }
+  const list = document.createElement("ui5-list");
+  list.mode = "SingleSelect";
+  list.separators = "Inner";
+  list.noDataText = "No records available.";
 
   rows.forEach((row) => {
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = "netz-entity-row";
-
-    const title = document.createElement("div");
-    title.className = "netz-entity-title";
-    title.textContent = safe(row.borrowerName);
-
-    const meta = document.createElement("div");
-    meta.className = "netz-entity-meta";
-    meta.textContent = `${safe(row.exposure)} • ${safe(row.riskBand)}`;
-
-    const badgeWrap = document.createElement("div");
-    badgeWrap.className = "netz-entity-badge";
-    badgeWrap.appendChild(makeStatusBadge(row.covenantStatus));
-    meta.appendChild(badgeWrap);
-
-    item.append(title, meta);
-    item.addEventListener("click", () => onSelect(row));
-    list.appendChild(item);
+    const li = document.createElement("ui5-li");
+    li.textContent = safe(row.borrowerName);
+    li.description = safe(row.riskBand);
+    li.additionalText = safe(row.exposure);
+    li.type = "Navigation";
+    li.addEventListener("click", () => onSelect(row));
+    list.appendChild(li);
   });
 
   return list;
@@ -150,31 +133,18 @@ function buildOverviewList(items) {
 }
 
 function buildSelectableList(items, onSelect) {
-  const list = document.createElement("div");
-  if (!items.length) {
-    const empty = document.createElement("div");
-    empty.className = "netz-meta-text";
-    empty.textContent = "No records available.";
-    list.appendChild(empty);
-    return list;
-  }
+  const list = document.createElement("ui5-list");
+  list.mode = "SingleSelect";
+  list.separators = "Inner";
+  list.noDataText = "No records available.";
 
   items.forEach((item) => {
-    const row = document.createElement("button");
-    row.type = "button";
-    row.className = "netz-entity-row";
-
-    const title = document.createElement("div");
-    title.className = "netz-entity-title";
-    title.textContent = safe(item.text);
-
-    const meta = document.createElement("div");
-    meta.className = "netz-entity-meta";
-    meta.textContent = safe(item.description);
-
-    row.append(title, meta);
-    row.addEventListener("click", () => onSelect(item));
-    list.appendChild(row);
+    const li = document.createElement("ui5-li");
+    li.textContent = safe(item.text);
+    li.description = safe(item.description);
+    li.type = "Navigation";
+    li.addEventListener("click", () => onSelect(item));
+    list.appendChild(li);
   });
 
   return list;
@@ -243,22 +213,38 @@ export class PortfolioPage {
     const column = document.createElement("div");
     column.className = "netz-fcl-col netz-fcl-col--begin";
 
+    /* ── Header (SAP S/4HANA pattern) ── */
     const header = document.createElement("div");
     header.className = "netz-fcl-header";
-    const title = document.createElement("div");
-    title.className = "netz-title-strong";
-    title.textContent = "Borrowers";
-    const subtitle = document.createElement("div");
-    subtitle.className = "netz-meta-text";
-    subtitle.textContent = "Entity Navigation";
-    header.append(title, subtitle);
+
+    this.beginTitle = document.createElement("div");
+    this.beginTitle.className = "netz-fcl-header-title";
+    this.beginTitle.textContent = "Borrowers";
+
+    const searchRow = document.createElement("div");
+    searchRow.className = "netz-fcl-search-row";
+
+    this.searchInput = document.createElement("ui5-input");
+    this.searchInput.type = "Search";
+    this.searchInput.placeholder = "Search";
+    this.searchInput.addEventListener("input", () => this._renderLeftList());
+
+    const filterBtn = document.createElement("ui5-button");
+    filterBtn.icon = "action-settings";
+    filterBtn.design = "Transparent";
+    filterBtn.tooltip = "Filters";
+    filterBtn.addEventListener("click", () => {
+      this.filterBar.style.display = this.filterBar.style.display === "none" ? "" : "none";
+    });
+
+    searchRow.append(this.searchInput, filterBtn);
+    header.append(this.beginTitle, searchRow);
     column.appendChild(header);
 
-    const body = document.createElement("div");
-    body.className = "netz-fcl-body";
-
-    const controls = document.createElement("div");
-    controls.className = "netz-multi netz-fcl-filter-bar";
+    /* ── Filter bar (collapsible) ── */
+    this.filterBar = document.createElement("div");
+    this.filterBar.className = "netz-fcl-filter-bar";
+    this.filterBar.style.display = "none";
 
     this.listViewSelect = document.createElement("ui5-select");
     this.listViewSelect.accessibleName = "Navigation";
@@ -299,7 +285,7 @@ export class PortfolioPage {
     resetBtn.textContent = "Reset";
     resetBtn.addEventListener("click", () => this._resetFilters());
 
-    controls.append(
+    this.filterBar.append(
       this.listViewSelect,
       this.investmentTypeSelect,
       this.borrowerCombo,
@@ -309,13 +295,19 @@ export class PortfolioPage {
       applyBtn,
       resetBtn,
     );
+    column.appendChild(this.filterBar);
+
+    /* ── Body (list) ── */
+    const body = document.createElement("div");
+    body.className = "netz-fcl-body";
 
     this.leftMeta = document.createElement("div");
     this.leftMeta.className = "netz-meta-text";
+    this.leftMeta.style.padding = "0.5rem";
 
     this.listHost = document.createElement("div");
 
-    body.append(controls, this.leftMeta, this.listHost);
+    body.append(this.leftMeta, this.listHost);
     column.appendChild(body);
     return column;
   }
@@ -324,11 +316,21 @@ export class PortfolioPage {
     const column = document.createElement("div");
     column.className = "netz-fcl-col netz-fcl-col--mid";
 
-    const body = document.createElement("div");
-    body.className = "netz-fcl-body";
-
+    /* ── Object Header (SAP S/4HANA: Avatar + Title + Facets) ── */
     this.objectHeader = document.createElement("div");
     this.objectHeader.className = "netz-object-header";
+
+    const headerRow = document.createElement("div");
+    headerRow.className = "netz-object-header-row";
+
+    this.objectAvatar = document.createElement("ui5-avatar");
+    this.objectAvatar.size = "M";
+    this.objectAvatar.shape = "Circle";
+    this.objectAvatar.initials = "B";
+    this.objectAvatar.colorScheme = "Accent6";
+
+    const headerInfo = document.createElement("div");
+    headerInfo.className = "netz-object-header-info";
 
     this.objectTitle = document.createElement("ui5-title");
     this.objectTitle.level = "H3";
@@ -337,10 +339,16 @@ export class PortfolioPage {
     this.objectKpis = document.createElement("div");
     this.objectKpis.className = "netz-object-kpis";
 
-    this.objectHeader.append(this.objectTitle, this.objectKpis);
+    headerInfo.append(this.objectTitle, this.objectKpis);
+    headerRow.append(this.objectAvatar, headerInfo);
+    this.objectHeader.appendChild(headerRow);
+    column.appendChild(this.objectHeader);
 
+    /* ── Icon Tab Bar ── */
     this.tabs = document.createElement("ui5-tabcontainer");
     this.tabs.className = "netz-object-tabs";
+    this.tabs.style.flex = "1";
+    this.tabs.style.overflow = "auto";
 
     this.tabOverview = this._createTab("overview", "Overview");
     this.tabFacilities = this._createTab("facilities", "Facilities");
@@ -348,8 +356,7 @@ export class PortfolioPage {
     this.tabDocuments = this._createTab("documents", "Documents");
 
     this.tabs.append(this.tabOverview, this.tabFacilities, this.tabCovenants, this.tabDocuments);
-    body.append(this.objectHeader, this.tabs);
-    column.appendChild(body);
+    column.appendChild(this.tabs);
     return column;
   }
 
@@ -357,17 +364,40 @@ export class PortfolioPage {
     const column = document.createElement("div");
     column.className = "netz-fcl-col netz-fcl-col--end";
 
+    /* ── End header: title + fullscreen/close (SAP S/4HANA pattern) ── */
     const header = document.createElement("div");
-    header.className = "netz-fcl-header";
-    const title = document.createElement("div");
-    title.className = "netz-title-strong";
-    title.textContent = "Contextual Sub-Detail";
-    header.appendChild(title);
+    header.className = "netz-fcl-end-header";
 
+    this.endTitle = document.createElement("div");
+    this.endTitle.className = "netz-fcl-end-header-title";
+    this.endTitle.textContent = "Detail";
+
+    const actions = document.createElement("div");
+    actions.className = "netz-fcl-end-header-actions";
+
+    const fullscreenBtn = document.createElement("ui5-button");
+    fullscreenBtn.icon = "full-screen";
+    fullscreenBtn.design = "Transparent";
+    fullscreenBtn.tooltip = "Full Screen";
+
+    const closeBtn = document.createElement("ui5-button");
+    closeBtn.icon = "decline";
+    closeBtn.design = "Transparent";
+    closeBtn.tooltip = "Close";
+    closeBtn.addEventListener("click", () => {
+      this.selectedSubDetail = null;
+      this._renderSubDetailPlaceholder();
+    });
+
+    actions.append(fullscreenBtn, closeBtn);
+    header.append(this.endTitle, actions);
+    column.appendChild(header);
+
+    /* ── Scrollable content ── */
     this.subDetailBody = document.createElement("div");
-    this.subDetailBody.className = "netz-fcl-body";
+    this.subDetailBody.className = "netz-fcl-end-content";
 
-    column.append(header, this.subDetailBody);
+    column.appendChild(this.subDetailBody);
     this._renderSubDetailPlaceholder();
     return column;
   }
@@ -398,29 +428,50 @@ export class PortfolioPage {
 
   _renderSubDetailPlaceholder() {
     this.subDetailBody.replaceChildren();
+    this.endTitle.textContent = "Detail";
+    const card = document.createElement("div");
+    card.className = "netz-fcl-form-card";
     const msg = document.createElement("div");
     msg.className = "netz-meta-text";
     msg.textContent = "Select a facility or covenant to inspect sub-detail.";
-    this.subDetailBody.appendChild(msg);
+    card.appendChild(msg);
+    this.subDetailBody.appendChild(card);
   }
 
   _renderSubDetail(item, type) {
     this.selectedSubDetail = { item, type };
     this.subDetailBody.replaceChildren();
+    this.endTitle.textContent = safe(item.text);
 
-    const wrap = document.createElement("div");
-    wrap.className = "netz-object-header";
+    const card = document.createElement("div");
+    card.className = "netz-fcl-form-card";
 
-    const title = document.createElement("ui5-title");
-    title.level = "H4";
-    title.textContent = safe(item.text);
+    const groupTitle = document.createElement("div");
+    groupTitle.className = "netz-fcl-form-group-title";
+    groupTitle.textContent = safe(type);
+    card.appendChild(groupTitle);
 
-    const meta = document.createElement("div");
-    meta.className = "netz-object-kpis";
-    meta.textContent = `Type: ${type} • ${safe(item.description)}`;
+    const pairs = [
+      ["Name:", safe(item.text)],
+      ["Details:", safe(item.description)],
+    ];
+    if (item.source) {
+      pairs.push(["Status:", safe(item.source.covenantStatus || item.source.status)]);
+    }
 
-    wrap.append(title, meta);
-    this.subDetailBody.appendChild(wrap);
+    pairs.forEach(([label, value]) => {
+      const formItem = document.createElement("div");
+      formItem.className = "netz-fcl-form-item";
+      const lbl = document.createElement("ui5-label");
+      lbl.textContent = label;
+      const val = document.createElement("span");
+      val.className = "netz-fcl-value";
+      val.textContent = value;
+      formItem.append(lbl, val);
+      card.appendChild(formItem);
+    });
+
+    this.subDetailBody.appendChild(card);
   }
 
   _applyFilters() {
@@ -492,13 +543,25 @@ export class PortfolioPage {
   _renderLeftList() {
     const source = this.state.listView === "FACILITIES" ? this.data.facilities : this.data.borrowers;
     const filtered = this._applyClientFilters(source);
-    this.listHost.replaceChildren(buildItemList(filtered, (row) => this._selectItem(row)));
+    const searchTerm = (this.searchInput?.value || "").toLowerCase();
+    const searched = searchTerm
+      ? filtered.filter((row) => {
+          const name = String(row.borrowerName || row.facilityName || "").toLowerCase();
+          return name.includes(searchTerm);
+        })
+      : filtered;
+    const label = this.state.listView === "FACILITIES" ? "Facilities" : "Borrowers";
+    this.beginTitle.textContent = `${label} (${searched.length})`;
+    this.listHost.replaceChildren(buildItemList(searched, (row) => this._selectItem(row)));
   }
 
   _selectItem(row) {
     this.selectedItem = row;
 
-    this.objectTitle.textContent = safe(row.borrowerName || row.borrower, "Borrower");
+    const displayName = safe(row.borrowerName || row.borrower, "Borrower");
+    this.objectTitle.textContent = displayName;
+    this.objectAvatar.initials = displayName.substring(0, 2).toUpperCase();
+    this.endTitle.textContent = displayName;
 
     this.objectKpis.replaceChildren();
     const fragments = [
